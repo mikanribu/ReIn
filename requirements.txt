@@ -1,0 +1,24 @@
+# Core web framework
+fastapi>=0.110
+uvicorn[standard]>=0.29
+python-multipart>=0.0.9
+
+# Data / persistence
+sqlalchemy>=2.0
+pydantic>=2.6
+pydantic-settings>=2.2
+
+# LLM extraction
+langchain-core>=0.3
+langchain-anthropic>=0.3
+
+# Document parsing
+pypdf>=4.0
+docx2txt>=0.8
+
+# Testing
+pytest>=8.0
+httpx>=0.27
+
+# Optional: Postgres/Supabase driver (uncomment for production)
+# psycopg[binary]>=3.1
