@@ -1,11 +1,16 @@
 """FastAPI application factory."""
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 
 from app.api.routes_documents import router as documents_router
 from app.api.routes_treaties import router as treaties_router
 from app.database import init_db
+
+STATIC_DIR = Path(__file__).resolve().parent / "static"
 
 
 @asynccontextmanager
@@ -29,6 +34,12 @@ def create_app() -> FastAPI:
     )
     app.include_router(documents_router)
     app.include_router(treaties_router)
+    app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+
+    @app.get("/", include_in_schema=False)
+    def ui() -> FileResponse:
+        """The review web UI (single-page app)."""
+        return FileResponse(STATIC_DIR / "index.html")
 
     @app.get("/health", tags=["ops"])
     def health() -> dict:
