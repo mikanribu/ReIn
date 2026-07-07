@@ -1,0 +1,73 @@
+PROPERTY CATASTROPHE EXCESS OF LOSS REINSURANCE AGREEMENT
+
+Contract Reference: CAT-XL-2026-001
+
+between
+
+ALPINE INSURANCE COMPANY S.A., Zurich, Switzerland
+(hereinafter called the "Company" or the "Reinsured")
+
+and
+
+THE SUBSCRIBING REINSURERS
+Helvetia Re (60%), Nordic Re (40%)
+
+placed through
+Meridian Reinsurance Brokers Ltd, London
+
+ARTICLE 1 — BUSINESS COVERED
+This Agreement covers all losses occurring under policies classified by the
+Company as Property (Fire, Engineering and Allied Perils) in respect of
+business written in Switzerland, Germany and Austria.
+
+ARTICLE 2 — PERIOD
+This Agreement applies to losses occurring during the period from
+1 January 2026 to 31 December 2026, both days inclusive, local standard time.
+
+ARTICLE 3 — LIMIT AND RETENTION
+The Reinsurers shall be liable in respect of each and every loss occurrence
+for the amount of ultimate net loss in excess of CHF 10,000,000
+(the "Priority") up to a limit of CHF 40,000,000 each and every loss
+occurrence. The overall aggregate limit of liability of the Reinsurers under
+this Agreement shall not exceed CHF 120,000,000 in the annual period.
+
+ARTICLE 4 — REINSTATEMENT
+The amount of cover hereunder shall be reinstated twice, each reinstatement
+at 100% additional premium pro rata to amount reinstated.
+
+ARTICLE 5 — PREMIUM
+The Company shall pay to the Reinsurers a premium calculated at a rate of
+2.85% of the Company's Gross Net Premium Income ("GNPI"), estimated at
+CHF 450,000,000, subject to a minimum premium of CHF 10,500,000 and a
+deposit premium of CHF 12,000,000 payable in four equal quarterly
+instalments on 1 January, 1 April, 1 July and 1 October 2026.
+
+ARTICLE 6 — CURRENCY
+All amounts under this Agreement are expressed in Swiss Francs (CHF).
+
+ARTICLE 7 — CASH LOSS
+The Reinsurers shall on request remit their share of any loss settlement
+exceeding CHF 5,000,000 (cash loss limit) within 14 days.
+
+ARTICLE 8 — CLAIMS NOTIFICATION
+The Company shall notify the Reinsurers of any loss occurrence likely to
+involve this Agreement where the ultimate net loss is estimated to exceed
+50% of the Priority.
+
+ARTICLE 9 — EXCLUSIONS
+This Agreement excludes:
+(a) War and civil war;
+(b) Nuclear energy risks as per the Nuclear Energy Risks Exclusion Clause;
+(c) Cyber losses as per LMA 5455;
+(d) Pollution and contamination unless resulting from a covered peril;
+(e) Terrorism as per NMA 2930.
+
+ARTICLE 10 — SPECIAL TERMINATION
+Either party may terminate this Agreement immediately by written notice if
+the other party loses fifty percent (50%) or more of its paid-up capital,
+becomes insolvent, or if its financial strength rating falls below A- (AM Best).
+
+ARTICLE 11 — ARBITRATION AND GOVERNING LAW
+Any dispute arising out of this Agreement shall be referred to arbitration
+in Zurich under the Swiss Rules of International Arbitration. This
+Agreement shall be governed by the laws of Switzerland.
