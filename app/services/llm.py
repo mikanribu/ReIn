@@ -15,9 +15,14 @@ def get_chat_model() -> BaseChatModel:
     from langchain_anthropic import ChatAnthropic
 
     settings = get_settings()
-    return ChatAnthropic(
-        model=settings.anthropic_model,
-        max_tokens=settings.llm_max_tokens,
+    kwargs: dict = {
+        "model": settings.anthropic_model,
+        "max_tokens": settings.llm_max_tokens,
         # Structured output below uses forced tool calling; we deliberately do
         # not set sampling parameters (removed on current Opus-tier models).
-    )
+    }
+    # Pass the key explicitly when configured (env var or .env); otherwise let
+    # the SDK resolve it from the environment.
+    if settings.anthropic_api_key:
+        kwargs["api_key"] = settings.anthropic_api_key
+    return ChatAnthropic(**kwargs)

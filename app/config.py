@@ -16,8 +16,11 @@ class Settings(BaseSettings):
     #   postgresql+psycopg://postgres:<password>@db.<ref>.supabase.co:5432/postgres
     database_url: str = "sqlite:///./rein.db"
 
-    # LLM used for extraction. Requires ANTHROPIC_API_KEY in the environment.
+    # LLM used for extraction. The API key may be supplied either via the
+    # ANTHROPIC_API_KEY environment variable or in the .env file — both are
+    # read here and passed explicitly to the model.
     anthropic_model: str = "claude-opus-4-8"
+    anthropic_api_key: str | None = None
     llm_max_tokens: int = 16000
 
     # Documents larger than this (characters) are truncated before being
