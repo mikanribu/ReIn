@@ -103,6 +103,20 @@ function valueToInput(v) {
   return typeof v === "string" ? v : JSON.stringify(v);
 }
 
+// Editor control for a data-point value: a single-line input for short values,
+// a multi-line textarea for long ones (lists, clauses, schedules). Both carry
+// the `edit-value` class so callers read `.value` uniformly. `extraAttrs` lets
+// callers add e.g. data-original for change tracking.
+function valueEditorHtml(value, extraAttrs = "") {
+  const v = valueToInput(value);
+  const long = v.length > 45 || v.includes("\n");
+  if (long) {
+    const rows = Math.min(8, Math.max(3, Math.ceil(v.length / 60)));
+    return `<textarea class="edit-value" rows="${rows}" ${extraAttrs}>${esc(v)}</textarea>`;
+  }
+  return `<input type="text" class="edit-value" value="${esc(v)}" ${extraAttrs} />`;
+}
+
 // ---------------------------------------------------------------------------
 // Router
 // ---------------------------------------------------------------------------
@@ -360,7 +374,7 @@ async function renderVersion(treatyId, versionNumber) {
       <td style="min-width:220px">
         <div class="val-display">${valueCell}</div>
         ${editable ? `<div class="editbox" hidden>
-            <input type="text" class="edit-value" value="${esc(valueToInput(p.value))}" />
+            ${valueEditorHtml(p.value)}
             <input type="text" class="edit-note" placeholder="reason for change (optional)" />
             <button class="secondary btn-save">Save</button>
             <button class="ghost btn-cancel">Cancel</button>
@@ -537,12 +551,14 @@ async function renderVersion(treatyId, versionNumber) {
       const current = v.data_points.find((p) => p.field_key === key);
       const cell = tr.children[1];
       cell.innerHTML = `<div class="editbox">
-        <input type="text" value="${esc(valueToInput(current.value))}" data-original="${esc(valueToInput(current.value))}" />
+        ${valueEditorHtml(current.value, `data-original="${esc(valueToInput(current.value))}"`)}
       </div>`;
     });
     actions.innerHTML = `
       <input type="text" id="amend-reason" placeholder="business reason (required)" style="width:240px" />
-      <input type="text" id="amend-effective" placeholder="effective date YYYY-MM-DD" style="width:170px" />
+      <label class="small muted" style="display:inline-flex;align-items:center;gap:6px">
+        effective date <input type="date" id="amend-effective" />
+      </label>
       <button id="btn-submit-amend">Create amendment draft</button>
       <button class="secondary" id="btn-cancel-amend">Cancel</button>`;
     document.getElementById("btn-cancel-amend").onclick = () => renderVersion(treatyId, versionNumber);
@@ -550,7 +566,7 @@ async function renderVersion(treatyId, versionNumber) {
       const reason = document.getElementById("amend-reason").value.trim();
       if (!reason) return toast("A business reason is required", true);
       const changes = {};
-      document.querySelectorAll("#dp-body .editbox input").forEach((inp) => {
+      document.querySelectorAll("#dp-body .editbox .edit-value").forEach((inp) => {
         if (inp.value !== inp.dataset.original) {
           changes[inp.closest("tr").dataset.key] = parseValue(inp.value);
         }

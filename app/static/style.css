@@ -125,8 +125,10 @@ tr.clickable:hover { background: var(--accent-soft); }
 #toast.show { opacity: 1; }
 #toast.error { background: var(--bad); }
 
-.editbox { display: flex; gap: 6px; margin-top: 6px; }
+.editbox { display: flex; gap: 6px; margin-top: 6px; align-items: flex-start; flex-wrap: wrap; }
 .editbox[hidden] { display: none; }
+.editbox .edit-value { flex: 1 1 260px; font-family: var(--mono); font-size: 12.5px; }
+.editbox textarea.edit-value { width: 100%; min-width: 260px; resize: vertical; line-height: 1.4; }
 
 /* Loading indicator for long operations (upload + extraction). */
 .loader { display: inline-flex; align-items: center; gap: 10px; }
