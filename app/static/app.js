@@ -164,7 +164,11 @@ async function renderHome() {
       defined data point with its source quote and confidence, and creates a <b>draft</b> for your review —
       nothing is used downstream until you approve it.</p>
       <div class="row">
-        <input type="file" id="treaty-file" accept=".pdf,.docx,.txt,.md" />
+        <label class="file-input">
+          <input type="file" id="treaty-file" accept=".pdf,.docx,.txt,.md" />
+          <span class="file-btn">Choose file</span>
+          <span class="file-name">No file chosen</span>
+        </label>
         <button id="btn-extract">Upload &amp; extract</button>
         <span class="muted small" id="extract-status"></span>
       </div>
@@ -255,7 +259,11 @@ async function renderTreaty(treatyId, tab = "versions") {
           <p class="muted small" style="max-width:340px">Upload an addendum / endorsement. The parser maps its
           changes onto the data points and creates a new draft version for review.</p>
           <div class="row">
-            <input type="file" id="amend-file" accept=".pdf,.docx,.txt,.md" ${approved ? "" : "disabled"} />
+            <label class="file-input ${approved ? "" : "disabled"}">
+              <input type="file" id="amend-file" accept=".pdf,.docx,.txt,.md" ${approved ? "" : "disabled"} />
+              <span class="file-btn">Choose file</span>
+              <span class="file-name">No file chosen</span>
+            </label>
             <button id="btn-amend-doc" ${approved ? "" : "disabled"}>Upload &amp; apply</button>
           </div>
           <span class="muted small" id="amend-status"></span>
@@ -584,5 +592,15 @@ async function renderVersion(treatyId, versionNumber) {
     };
   }
 }
+
+// Reflect the chosen file's name in our styled file pickers (delegated, so it
+// works for pickers created on any re-render).
+document.addEventListener("change", (e) => {
+  const inp = e.target;
+  if (inp && inp.matches && inp.matches('.file-input input[type="file"]')) {
+    const nameEl = inp.parentElement.querySelector(".file-name");
+    if (nameEl) nameEl.textContent = inp.files.length ? inp.files[0].name : "No file chosen";
+  }
+});
 
 route();

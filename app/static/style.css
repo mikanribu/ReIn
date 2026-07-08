@@ -68,7 +68,7 @@ button.secondary { background: #fff; color: var(--text); border: 1px solid var(-
 button.danger { background: var(--bad); }
 button.ghost { background: transparent; color: var(--accent); padding: 4px 8px; }
 input[type="text"], input[type="date"], input[type="number"], input[type="email"],
-input[type="search"], input[type="file"], textarea, select {
+input[type="search"], textarea, select {
   border: 1px solid var(--border); border-radius: 7px; padding: 7px 10px;
   font: inherit; background: #fff; color: var(--text); height: 34px;
 }
@@ -81,15 +81,23 @@ input:focus, textarea:focus, select:focus {
   box-shadow: 0 0 0 3px var(--accent-soft);
 }
 
-/* File input: theme the native "Choose file" button to match app buttons. */
-input[type="file"] { padding: 4px 8px; cursor: pointer; line-height: 24px; }
-input[type="file"]::file-selector-button {
-  margin-right: 10px; border: 1px solid var(--border); border-radius: 6px;
-  padding: 5px 12px; background: #fff; color: var(--text); font: inherit; cursor: pointer;
+/* File picker: hide the native control, drive it with a styled label so it
+   looks identical across browsers (no box-in-box native chrome). */
+.file-input { display: inline-flex; align-items: center; gap: 10px; cursor: pointer; }
+.file-input input[type="file"] {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0); border: 0;
 }
-input[type="file"]::file-selector-button:hover {
-  background: var(--accent-soft); border-color: var(--accent); color: var(--accent);
+.file-input .file-btn {
+  display: inline-flex; align-items: center; height: 34px;
+  border: 1px solid var(--border); border-radius: 7px; padding: 0 14px;
+  background: #fff; color: var(--text); font-size: 13.5px; white-space: nowrap;
 }
+.file-input:hover .file-btn { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+.file-input input:focus + .file-btn { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.file-input .file-name { color: var(--muted); font-size: 13px; }
+.file-input.disabled { cursor: default; opacity: 0.55; }
+.file-input.disabled:hover .file-btn { background: #fff; border-color: var(--border); color: var(--text); }
 
 /* Date input: align the native picker indicator with the theme. */
 input[type="date"]::-webkit-calendar-picker-indicator { cursor: pointer; opacity: 0.55; }
