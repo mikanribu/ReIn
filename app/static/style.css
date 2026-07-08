@@ -67,11 +67,33 @@ button:disabled { background: #b8c4d2; cursor: default; }
 button.secondary { background: #fff; color: var(--text); border: 1px solid var(--border); }
 button.danger { background: var(--bad); }
 button.ghost { background: transparent; color: var(--accent); padding: 4px 8px; }
-input[type="text"], input[type="file"], textarea, select {
+input[type="text"], input[type="date"], input[type="number"], input[type="email"],
+input[type="search"], input[type="file"], textarea, select {
   border: 1px solid var(--border); border-radius: 7px; padding: 7px 10px;
-  font: inherit; background: #fff;
+  font: inherit; background: #fff; color: var(--text); height: 34px;
 }
-textarea { width: 100%; resize: vertical; }
+textarea { width: 100%; resize: vertical; height: auto; }
+select { height: 34px; }
+
+/* Consistent focus ring across every field. */
+input:focus, textarea:focus, select:focus {
+  outline: none; border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+/* File input: theme the native "Choose file" button to match app buttons. */
+input[type="file"] { padding: 4px 8px; cursor: pointer; line-height: 24px; }
+input[type="file"]::file-selector-button {
+  margin-right: 10px; border: 1px solid var(--border); border-radius: 6px;
+  padding: 5px 12px; background: #fff; color: var(--text); font: inherit; cursor: pointer;
+}
+input[type="file"]::file-selector-button:hover {
+  background: var(--accent-soft); border-color: var(--accent); color: var(--accent);
+}
+
+/* Date input: align the native picker indicator with the theme. */
+input[type="date"]::-webkit-calendar-picker-indicator { cursor: pointer; opacity: 0.55; }
+input[type="date"]::-webkit-calendar-picker-indicator:hover { opacity: 1; }
 
 table { width: 100%; border-collapse: collapse; }
 th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
