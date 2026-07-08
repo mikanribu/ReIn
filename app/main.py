@@ -21,7 +21,7 @@ async def lifespan(app: FastAPI):
 
 def create_app() -> FastAPI:
     app = FastAPI(
-        title="ReIn — Reinsurance Treaty Parser",
+        title="TreatyIQ — Reinsurance Treaty Parser",
         description=(
             "Parses reinsurance treaties with LangChain + Claude, maps every "
             "extracted data point with its source quote and confidence for human "

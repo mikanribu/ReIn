@@ -78,7 +78,7 @@ class TreatyExtraction(BaseModel):
     reinsurers: ExtractedField = Field(
         ..., description="List of reinsurer names with their share percentage if stated, e.g. ['Re A (60%)', 'Re B (40%)']."
     )
-    #broker: ExtractedField = Field(..., description="Intermediary/broker name, if any.")
+    broker: ExtractedField = Field(..., description="Intermediary/broker name, if any.")
 
     # --- Period & scope ---
     inception_date: ExtractedField = Field(..., description="Inception date of the period of coverage (ISO date).")
@@ -93,36 +93,36 @@ class TreatyExtraction(BaseModel):
     )
     treaty_settlement_exchange_rate_type: ExtractedField = Field(
         ..., description=(
-            "Settlement/exchange rate type (e.g. 'current', 'fixed').",
-            "Current = Treaty payments are settled using current exchange rate",
-            "Fixed = Treaty payments are settled using a fixed exchange rate"
+            "Settlement/exchange rate type (e.g. 'current', 'fixed'). "
+            "Current = Treaty payments are settled using current exchange rate. "
+            "Fixed = Treaty payments are settled using a fixed exchange rate."
         )
     )
 
     # --- Structure / economics ---
-    # cession_percentage: ExtractedField = Field(
-    #     ..., description="For quota share: ceded percentage (number, e.g. 30 for 30%)."
-    # )
-    # retention: ExtractedField = Field(
-    #     ...,
-    #     description=(
-    #         "Cedent's retention: for quota share the retained percentage; for surplus the retained line; "
-    #         "for XL the priority/deductible amount."
-    #     ),
-    # )
-    # limit: ExtractedField = Field(
-    #     ...,
-    #     description=(
-    #         "Reinsurer's limit of liability: per-risk/per-event cover amount for XL "
-    #         "(the 'xs' cover, e.g. 40000000 for '40,000,000 xs 10,000,000'), number of lines for surplus, "
-    #         "or maximum per-risk cession for quota share."
-    #     ),
-    # )
-    # aggregate_limit: ExtractedField = Field(..., description="Annual aggregate limit of liability, if any.")
-    # reinstatements: ExtractedField = Field(
-    #     ..., description="Number and cost of reinstatements, e.g. '2 @ 100% additional premium pro rata to amount'."
-    # )
-    # event_limit: ExtractedField = Field(..., description="Per-event limit / loss occurrence limit, if any.")
+    cession_percentage: ExtractedField = Field(
+        ..., description="For quota share: ceded percentage (number, e.g. 30 for 30%)."
+    )
+    retention: ExtractedField = Field(
+        ...,
+        description=(
+            "Cedent's retention: for quota share the retained percentage; for surplus the retained line; "
+            "for XL the priority/deductible amount."
+        ),
+    )
+    limit: ExtractedField = Field(
+        ...,
+        description=(
+            "Reinsurer's limit of liability: per-risk/per-event cover amount for XL "
+            "(the 'xs' cover, e.g. 40000000 for '40,000,000 xs 10,000,000'), number of lines for surplus, "
+            "or maximum per-risk cession for quota share."
+        ),
+    )
+    aggregate_limit: ExtractedField = Field(..., description="Annual aggregate limit of liability, if any.")
+    reinstatements: ExtractedField = Field(
+        ..., description="Number and cost of reinstatements, e.g. '2 @ 100% additional premium pro rata to amount'."
+    )
+    event_limit: ExtractedField = Field(..., description="Per-event limit / loss occurrence limit, if any.")
 
 
     # --- Premium ---
@@ -132,30 +132,30 @@ class TreatyExtraction(BaseModel):
     treaty_ratio: ExtractedField = Field(..., description="Treaty Reinsurance ratio, if any.", examples=[0.35, 0.45])
     treaty_share_ratio: ExtractedField = Field(..., description="Treaty share ratio, if any.", examples=[0.25, 0.70])
 
-    # minimum_premium: ExtractedField = Field(..., description="Minimum premium amount.")
-    # deposit_premium: ExtractedField = Field(..., description="Deposit/provisional premium amount and payment schedule.")
-    # adjustable_rate: ExtractedField = Field(
-    #     ..., description="Adjustable/burning-cost rate details, e.g. 'min 1.5% max 4.5%, loading 100/70'."
-    # )
-    # premium_payment_terms: ExtractedField = Field(..., description="Premium payment schedule/instalments.")
-    # estimated_premium_income: ExtractedField = Field(
-    #     ..., description="Estimated/Gross Net Premium Income (EPI/GNPI) the rates apply to."
-    # )
+    minimum_premium: ExtractedField = Field(..., description="Minimum premium amount.")
+    deposit_premium: ExtractedField = Field(..., description="Deposit/provisional premium amount and payment schedule.")
+    adjustable_rate: ExtractedField = Field(
+        ..., description="Adjustable/burning-cost rate details, e.g. 'min 1.5% max 4.5%, loading 100/70'."
+    )
+    premium_payment_terms: ExtractedField = Field(..., description="Premium payment schedule/instalments.")
+    estimated_premium_income: ExtractedField = Field(
+        ..., description="Estimated/Gross Net Premium Income (EPI/GNPI) the rates apply to."
+    )
 
-    # --- Commission Rate ---
-    # ceding_commission: ExtractedField = Field(
-    #     ..., description="Flat ceding commission percentage, or provisional commission for sliding scale."
-    # )
-    # sliding_scale_commission: ExtractedField = Field(
-    #     ..., description="Sliding scale terms: min/max commission and corresponding loss ratios."
-    # )
-    # profit_commission: ExtractedField = Field(
-    #     ..., description="Profit commission percentage and basis (e.g. '20% after 5% management expenses')."
-    # )
-    # brokerage: ExtractedField = Field(..., description="Brokerage percentage, if stated.")
-    # loss_participation: ExtractedField = Field(
-    #     ..., description="Loss participation / loss corridor clause details, if any."
-    # )
+    #--- Commission Rate ---
+    ceding_commission: ExtractedField = Field(
+        ..., description="Flat ceding commission percentage, or provisional commission for sliding scale."
+    )
+    sliding_scale_commission: ExtractedField = Field(
+        ..., description="Sliding scale terms: min/max commission and corresponding loss ratios."
+    )
+    profit_commission: ExtractedField = Field(
+        ..., description="Profit commission percentage and basis (e.g. '20% after 5% management expenses')."
+    )
+    brokerage: ExtractedField = Field(..., description="Brokerage percentage, if stated.")
+    loss_participation: ExtractedField = Field(
+        ..., description="Loss participation / loss corridor clause details, if any."
+    )
 
     # --- Legal / other ---
     exclusions: ExtractedField = Field(..., description="List of exclusions.")
