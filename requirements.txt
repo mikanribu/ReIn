@@ -10,7 +10,10 @@ pydantic-settings>=2.2
 
 # LLM extraction
 langchain-core>=0.3
-langchain-anthropic>=0.3
+# Provider integrations — install the one(s) you use (see LLM_PROVIDER):
+langchain-anthropic>=0.3        # provider: anthropic (default)
+# langchain-ollama>=0.2         # provider: ollama       (local models)
+# langchain-openai>=0.2         # provider: azure_openai (Azure OpenAI)
 
 # Document parsing
 pypdf>=4.0

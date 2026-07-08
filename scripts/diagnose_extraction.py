@@ -40,45 +40,57 @@ def print_chain(exc: BaseException) -> None:
 
 
 def main() -> int:
+    from app.services.llm import get_chat_model
+
     s = get_settings()
-    if not s.anthropic_api_key:
-        print("ANTHROPIC_API_KEY not set (env or .env)."); return 2
-    key = s.anthropic_api_key
-    key = key.get_secret_value() if hasattr(key, "get_secret_value") else str(key)
+    provider = s.llm_provider
+    print(f"Provider: {provider}")
     text = SAMPLE.read_text()
 
-    from langchain_anthropic import ChatAnthropic
+    try:
+        llm = get_chat_model()
+    except Exception as exc:  # noqa: BLE001
+        print(f"Could not construct the model for provider '{provider}': {exc}")
+        return 2
 
     # 1. Blocking call — the current app behavior.
-    print(f"=== Attempt 1: blocking extraction ({s.anthropic_model}) ===")
+    print(f"=== Attempt 1: blocking extraction (provider={provider}) ===")
     t0 = time.time()
     try:
-        llm = ChatAnthropic(model=s.anthropic_model, api_key=key, max_tokens=s.llm_max_tokens)
         result = llm.with_structured_output(TreatyExtraction).invoke(text)
         print(f"  OK in {time.time()-t0:.1f}s — extracted treaty '{result.treaty_name.value}'")
-        print("  Your network handles the blocking request fine.")
+        print("  Extraction works with the current provider/config.")
         return 0
     except Exception as exc:  # noqa: BLE001
         print(f"  FAILED after {time.time()-t0:.1f}s: {type(exc).__name__}: {exc}")
         print_chain(exc)
 
-    # 2. Streaming call — keeps the connection active with continuous data.
-    print(f"\n=== Attempt 2: same extraction with streaming=True ===")
-    t0 = time.time()
-    try:
-        llm = ChatAnthropic(model=s.anthropic_model, api_key=key,
-                            max_tokens=s.llm_max_tokens, streaming=True)
-        result = llm.with_structured_output(TreatyExtraction).invoke(text)
-        print(f"  OK in {time.time()-t0:.1f}s — extracted treaty '{result.treaty_name.value}'")
-        print("\n  >>> Streaming works where blocking failed. The fix is to stream the")
-        print("  >>> extraction (a network middlebox is dropping the long blocking POST).")
-        return 0
-    except Exception as exc:  # noqa: BLE001
-        print(f"  FAILED after {time.time()-t0:.1f}s: {type(exc).__name__}: {exc}")
-        print_chain(exc)
-        print("\n  Both failed. Paste this whole output back — the exception chain above")
-        print("  identifies the real cause (proxy, TLS, HTTP/2, timeout).")
-        return 1
+    # 2. Streaming call (Anthropic only) — keeps the connection active with
+    #    continuous data, which fixes long blocking requests dropped by a
+    #    network middlebox.
+    if provider == "anthropic":
+        print("\n=== Attempt 2: same extraction with streaming=True ===")
+        t0 = time.time()
+        try:
+            from langchain_anthropic import ChatAnthropic
+            key = s.anthropic_api_key
+            key = key.get_secret_value() if hasattr(key, "get_secret_value") else str(key)
+            sllm = ChatAnthropic(model=s.anthropic_model, api_key=key,
+                                 max_tokens=s.llm_max_tokens, streaming=True)
+            result = sllm.with_structured_output(TreatyExtraction).invoke(text)
+            print(f"  OK in {time.time()-t0:.1f}s — extracted treaty '{result.treaty_name.value}'")
+            print("\n  >>> Streaming works where blocking failed. The fix is to stream the")
+            print("  >>> extraction (a network middlebox is dropping the long blocking POST).")
+            return 0
+        except Exception as exc:  # noqa: BLE001
+            print(f"  FAILED after {time.time()-t0:.1f}s: {type(exc).__name__}: {exc}")
+            print_chain(exc)
+
+    print("\n  Paste this whole output back — the exception chain above identifies the")
+    print("  real cause (schema/version, proxy, TLS, HTTP/2, timeout). Switching")
+    print("  LLM_PROVIDER (e.g. to azure_openai or ollama) is another way around")
+    print("  provider-specific failures.")
+    return 1
 
 
 if __name__ == "__main__":

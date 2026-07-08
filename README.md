@@ -97,6 +97,25 @@ python -m pytest tests/ -q
 3. Set in `.env`:
    `DATABASE_URL=postgresql+psycopg://postgres:<password>@db.<project-ref>.supabase.co:5432/postgres`
 
+## Choosing an LLM provider
+
+Extraction runs through LangChain, so the backend is swappable via
+`LLM_PROVIDER` in `.env` — `anthropic` (default), `ollama` (local models), or
+`azure_openai`. Install only the integration you use; the model construction
+lives solely in `app/services/llm.py`.
+
+| Provider | Install | `.env` |
+|---|---|---|
+| **Anthropic** (Claude) | `pip install langchain-anthropic` | `LLM_PROVIDER=anthropic`, `ANTHROPIC_API_KEY=…`, `ANTHROPIC_MODEL=claude-opus-4-8` |
+| **Ollama** (local, no key) | `pip install langchain-ollama` + run `ollama serve` | `LLM_PROVIDER=ollama`, `OLLAMA_MODEL=llama3.1`, `OLLAMA_BASE_URL=http://localhost:11434` |
+| **Azure OpenAI** | `pip install langchain-openai` | `LLM_PROVIDER=azure_openai`, `AZURE_OPENAI_API_KEY=…`, `AZURE_OPENAI_ENDPOINT=https://<resource>.openai.azure.com`, `AZURE_OPENAI_DEPLOYMENT=<deployment>` |
+
+Extraction uses structured output (`with_structured_output`), which all three
+providers support. For Ollama, pick a model that supports tools/structured
+output (e.g. `llama3.1`, `qwen2.5`, `mistral-nemo`). If a misconfigured
+provider is selected, the app fails fast with a message naming exactly what to
+install or set.
+
 ## Workflow walkthrough
 
 ```bash

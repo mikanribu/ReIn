@@ -20,10 +20,27 @@ class Settings(BaseSettings):
     #   postgresql+psycopg://postgres:<password>@db.<ref>.supabase.co:5432/postgres
     database_url: str = "sqlite:///./rein.db"
 
-    # LLM used for extraction. Requires ANTHROPIC_API_KEY in the environment.
+    # --- LLM provider selection -------------------------------------------
+    # Which backend performs extraction: 'anthropic', 'ollama' or 'azure_openai'.
+    llm_provider: str = "anthropic"
+    llm_max_tokens: int = 16000
+
+    # Anthropic (Claude)
     anthropic_api_key: SecretStr | None = None
     anthropic_model: str = "claude-opus-4-8"
-    llm_max_tokens: int = 16000
+
+    # Ollama (local models; no API key needed). Requires `pip install langchain-ollama`
+    # and a running Ollama server. Pick a model that supports tools/structured
+    # output, e.g. 'llama3.1', 'qwen2.5', 'mistral-nemo'.
+    ollama_model: str = "llama3.1"
+    ollama_base_url: str = "http://localhost:11434"
+
+    # Azure OpenAI. Requires `pip install langchain-openai`. The deployment name
+    # is your Azure deployment, not the base model name.
+    azure_openai_api_key: SecretStr | None = None
+    azure_openai_endpoint: str | None = None          # https://<resource>.openai.azure.com
+    azure_openai_deployment: str | None = None        # your deployment name
+    azure_openai_api_version: str = "2024-10-21"
 
     # Documents larger than this (characters) are truncated before being
     # sent to the LLM. Claude's 1M-token context comfortably covers full
