@@ -4,12 +4,16 @@ All configuration is environment-driven so the same code runs locally
 (SQLite) and in production (Supabase Postgres) without changes.
 """
 from functools import lru_cache
+from pathlib import Path
 
+from pydantic import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+ENV_FILE = Path(__file__).resolve().parent.parent / ".env"
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
+    model_config = SettingsConfigDict(env_file=ENV_FILE, env_file_encoding="utf-8", extra="ignore")
 
     # Database. For Supabase use the connection string from
     # Project Settings -> Database, e.g.:
@@ -17,6 +21,7 @@ class Settings(BaseSettings):
     database_url: str = "sqlite:///./rein.db"
 
     # LLM used for extraction. Requires ANTHROPIC_API_KEY in the environment.
+    anthropic_api_key: SecretStr | None = None
     anthropic_model: str = "claude-opus-4-8"
     llm_max_tokens: int = 16000
 

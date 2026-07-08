@@ -63,6 +63,7 @@ document or manually — every change creates a new reviewable version, and a
 | `app/services/llm.py` | Single place the chat model is constructed (swap model/provider here). |
 | `app/models.py` | SQLAlchemy ORM (documents, treaties, versions, data points, audit log). |
 | `app/api/` | HTTP routes. |
+| `app/static/` | The review web UI (vanilla HTML/CSS/JS single-page app, served at `/`). |
 | `supabase/schema.sql` | DDL for Supabase, incl. the append-only audit trigger. |
 | `tests/` | End-to-end workflow tests with a **fake LLM** (no API key needed). |
 
@@ -71,8 +72,17 @@ document or manually — every change creates a new reviewable version, and a
 ```bash
 pip install -r requirements.txt
 cp .env.example .env            # add your ANTHROPIC_API_KEY
-uvicorn app.main:app --reload   # interactive docs at http://localhost:8000/docs
+uvicorn app.main:app --reload
 ```
+
+Then open:
+
+* **`http://localhost:8000/`** — the **review web UI**: upload a treaty,
+  review every extracted data point next to its source quote and confidence,
+  correct values inline, approve/reject, apply amendments (document or
+  manual) with an old→new diff, and browse version history and the audit
+  trail. Plain HTML/JS served by the backend — no build step.
+* `http://localhost:8000/docs` — interactive API docs (Swagger).
 
 Run the tests (no API key required — the LLM is faked):
 

@@ -280,3 +280,15 @@ def test_audit_chain_detects_tampering(client):
     # Restore so other assertions (if re-run) aren't affected.
     with get_engine().begin() as conn:
         conn.execute(text("UPDATE audit_log SET actor = 'clementine' WHERE id = 2"))
+
+
+# --------------------------------------------------------------------------
+# 6. Web UI is served
+# --------------------------------------------------------------------------
+
+def test_ui_is_served(client):
+    resp = client.get("/")
+    assert resp.status_code == 200
+    assert "ReIn" in resp.text
+    for asset in ("/static/app.js", "/static/style.css"):
+        assert client.get(asset).status_code == 200

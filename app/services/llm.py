@@ -15,8 +15,12 @@ def get_chat_model() -> BaseChatModel:
     from langchain_anthropic import ChatAnthropic
 
     settings = get_settings()
+    if settings.anthropic_api_key is None:
+        raise RuntimeError("ANTHROPIC_API_KEY must be set in .env or the environment")
+
     return ChatAnthropic(
         model=settings.anthropic_model,
+        api_key=settings.anthropic_api_key,
         max_tokens=settings.llm_max_tokens,
         # Structured output below uses forced tool calling; we deliberately do
         # not set sampling parameters (removed on current Opus-tier models).
