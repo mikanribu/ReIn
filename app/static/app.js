@@ -51,6 +51,33 @@ const post = (path, payload) =>
 const patch = (path, payload) =>
   api(path, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
 
+// Animated loader for long operations. `stages` is a list of messages shown
+// in sequence (advancing on a timer) alongside a spinner and elapsed seconds.
+// Returns a handle with setMessage() and stop().
+function startLoader(container, stages, { block = false, stepMs = 5000 } = {}) {
+  container.innerHTML =
+    `<span class="loader${block ? " block" : ""}">
+       <span class="spinner"></span>
+       <span class="loader-msg"></span>
+       <span class="loader-time"></span>
+     </span>`;
+  const msgEl = container.querySelector(".loader-msg");
+  const timeEl = container.querySelector(".loader-time");
+  const t0 = Date.now();
+  let idx = 0;
+  msgEl.textContent = stages[0] || "Working…";
+  const tick = setInterval(() => {
+    timeEl.textContent = `${Math.floor((Date.now() - t0) / 1000)}s`;
+  }, 250);
+  const advance = setInterval(() => {
+    if (idx < stages.length - 1) msgEl.textContent = stages[++idx];
+  }, stepMs);
+  return {
+    setMessage(m) { msgEl.textContent = m; },
+    stop() { clearInterval(tick); clearInterval(advance); container.innerHTML = ""; },
+  };
+}
+
 function chip(status) {
   return `<span class="chip ${esc(status)}">${esc(status.replace(/_/g, " "))}</span>`;
 }
@@ -142,22 +169,31 @@ async function renderHome() {
     if (!fileEl.files.length) return toast("Choose a file first", true);
     const btn = document.getElementById("btn-extract");
     btn.disabled = true;
+    const loader = startLoader(status, [
+      `Uploading “${fileEl.files[0].name}”…`,
+      "Reading and parsing the document…",
+      "Sending the document to the model…",
+      "Extracting data points…",
+      "Mapping values, source quotes and confidence…",
+      "Still working — large documents take longer…",
+      "Almost there — finalizing the draft…",
+    ]);
     try {
-      status.textContent = "Uploading…";
       const fd = new FormData();
       fd.append("file", fileEl.files[0]);
       fd.append("kind", "treaty");
       fd.append("actor", actor());
       const doc = await api("/documents", { method: "POST", body: fd });
-      status.textContent = "Extracting data points (this can take a minute)…";
+      loader.setMessage("Extracting data points…");
       await post("/extractions", { document_id: doc.id, actor: actor() });
       const treaties2 = await api("/treaties");
       const t = treaties2[treaties2.length - 1];
+      loader.stop();
       toast("Extraction complete — review the draft");
       location.hash = `#/treaty/${t.id}/version/1`;
     } catch (err) {
+      loader.stop();
       toast(err.message, true);
-      status.textContent = "";
       btn.disabled = false;
     }
   };
@@ -268,21 +304,29 @@ async function renderTreaty(treatyId, tab = "versions") {
     const status = document.getElementById("amend-status");
     if (!fileEl.files.length) return toast("Choose an amendment document first", true);
     amendBtn.disabled = true;
+    const loader = startLoader(status, [
+      `Uploading “${fileEl.files[0].name}”…`,
+      "Reading and parsing the amendment…",
+      "Comparing against the current data points…",
+      "Identifying which values change…",
+      "Still working — large documents take longer…",
+      "Almost there — preparing the draft…",
+    ]);
     try {
-      status.textContent = "Uploading…";
       const fd = new FormData();
       fd.append("file", fileEl.files[0]);
       fd.append("kind", "amendment");
       fd.append("actor", actor());
       const doc = await api("/documents", { method: "POST", body: fd });
-      status.textContent = "Mapping changes onto data points…";
+      loader.setMessage("Mapping changes onto data points…");
       const version = await post(`/treaties/${treatyId}/amendments/from-document`,
         { document_id: doc.id, actor: actor() });
+      loader.stop();
       toast("Amendment parsed — review the new draft");
       location.hash = `#/treaty/${treatyId}/version/${version.version_number}`;
     } catch (err) {
+      loader.stop();
       toast(err.message, true);
-      status.textContent = "";
       amendBtn.disabled = false;
     }
   };
