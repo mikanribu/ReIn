@@ -316,8 +316,10 @@ async function renderVersion(treatyId, versionNumber) {
       <td style="min-width:220px">
         <div class="val-display">${valueCell}</div>
         ${editable ? `<div class="editbox" hidden>
-            <input type="text" value="${esc(valueToInput(p.value))}" />
+            <input type="text" class="edit-value" value="${esc(valueToInput(p.value))}" />
+            <input type="text" class="edit-note" placeholder="reason for change (optional)" />
             <button class="secondary btn-save">Save</button>
+            <button class="ghost btn-cancel">Cancel</button>
           </div>` : ""}
       </td>
       <td>${chip(p.status)}</td>
@@ -398,29 +400,48 @@ async function renderVersion(treatyId, versionNumber) {
     } catch (err) { toast(err.message, true); }
   }
 
-  // Inline editing (drafts)
+  // Inline editing (drafts). The change reason is captured in an inline
+  // field — no native prompt(), which some browsers/extensions block.
+  function openEditor(tr) {
+    tr.querySelector(".val-display").hidden = true;
+    tr.querySelector(".editbox").hidden = false;
+    const editBtn = tr.querySelector(".btn-edit");
+    if (editBtn) editBtn.hidden = true;
+    tr.querySelector(".edit-value").focus();
+  }
+  function closeEditor(tr) {
+    tr.querySelector(".val-display").hidden = false;
+    tr.querySelector(".editbox").hidden = true;
+    const editBtn = tr.querySelector(".btn-edit");
+    if (editBtn) editBtn.hidden = false;
+  }
+  async function saveEditor(tr) {
+    const key = tr.dataset.key;
+    const value = parseValue(tr.querySelector(".edit-value").value);
+    const note = tr.querySelector(".edit-note").value.trim() || null;
+    try {
+      await patch(`/treaties/${treatyId}/versions/${versionNumber}/data-points/${key}`,
+        { value, note, actor: actor() });
+      toast(`Updated ${tr.querySelector("b").textContent}`);
+      await renderVersion(treatyId, versionNumber);
+    } catch (err) { toast(err.message, true); }
+  }
+
   document.querySelectorAll("#dp-body .btn-edit").forEach((btn) => {
-    btn.onclick = () => {
-      const tr = btn.closest("tr");
-      tr.querySelector(".val-display").hidden = true;
-      tr.querySelector(".editbox").hidden = false;
-      btn.hidden = true;
-    };
+    btn.onclick = () => openEditor(btn.closest("tr"));
   });
   document.querySelectorAll("#dp-body .btn-save").forEach((btn) => {
-    btn.onclick = async () => {
-      const tr = btn.closest("tr");
-      const key = tr.dataset.key;
-      const value = parseValue(tr.querySelector(".editbox input").value);
-      const note = prompt("Why is this value being changed? (recorded in the audit trail)");
-      if (note === null) return;
-      try {
-        await patch(`/treaties/${treatyId}/versions/${versionNumber}/data-points/${key}`,
-          { value, note: note || null, actor: actor() });
-        toast(`Updated ${key}`);
-        await renderVersion(treatyId, versionNumber);
-      } catch (err) { toast(err.message, true); }
-    };
+    btn.onclick = () => saveEditor(btn.closest("tr"));
+  });
+  document.querySelectorAll("#dp-body .btn-cancel").forEach((btn) => {
+    btn.onclick = () => closeEditor(btn.closest("tr"));
+  });
+  // Enter saves, Escape cancels while editing.
+  document.querySelectorAll("#dp-body .editbox").forEach((box) => {
+    box.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") { e.preventDefault(); saveEditor(box.closest("tr")); }
+      else if (e.key === "Escape") { e.preventDefault(); closeEditor(box.closest("tr")); }
+    });
   });
 
   // Manual amendment mode (approved versions): edit values -> collect ->
