@@ -1,5 +1,8 @@
 """Document upload and retrieval."""
+import mimetypes
+
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -8,6 +11,13 @@ from app.schemas.api import DocumentOut
 from app.services import audit, documents
 
 router = APIRouter(prefix="/documents", tags=["documents"])
+
+
+def _guess_content_type(filename: str, provided: str | None) -> str:
+    if provided and provided != "application/octet-stream":
+        return provided
+    guessed, _ = mimetypes.guess_type(filename)
+    return guessed or "application/octet-stream"
 
 
 def _to_out(doc: Document) -> DocumentOut:
@@ -34,11 +44,14 @@ async def upload_document(
     data = await file.read()
     if not data:
         raise HTTPException(422, "Uploaded file is empty")
-    text = documents.extract_text(file.filename or "upload.txt", data)
+    filename = file.filename or "upload.txt"
+    text = documents.extract_text(filename, data)
     doc = Document(
-        filename=file.filename or "upload.txt",
+        filename=filename,
         kind=kind,
         content_text=text,
+        content_bytes=data,
+        content_type=_guess_content_type(filename, file.content_type),
         sha256=documents.sha256_hex(data),
         uploaded_by=actor,
     )
@@ -70,3 +83,28 @@ def get_document_text(document_id: str, db: Session = Depends(get_db)) -> dict:
     if doc is None:
         raise HTTPException(404, f"Document {document_id} not found")
     return {"id": doc.id, "filename": doc.filename, "text": doc.content_text}
+
+
+@router.get("/{document_id}/file")
+def get_document_file(document_id: str, db: Session = Depends(get_db)) -> Response:
+    """Serve the original uploaded file so it can be viewed/downloaded.
+
+    PDFs render inline in the browser; other types download. Documents
+    uploaded before file storage was added have no bytes -> 404.
+    """
+    doc = db.get(Document, document_id)
+    if doc is None:
+        raise HTTPException(404, f"Document {document_id} not found")
+    if not doc.content_bytes:
+        raise HTTPException(
+            404,
+            "The original file for this document is not stored "
+            "(it was uploaded before file viewing was enabled). Re-upload to view it.",
+        )
+    # Inline so browsers preview PDFs/text instead of forcing a download.
+    safe_name = doc.filename.replace('"', "")
+    return Response(
+        content=doc.content_bytes,
+        media_type=doc.content_type or "application/octet-stream",
+        headers={"Content-Disposition": f'inline; filename="{safe_name}"'},
+    )

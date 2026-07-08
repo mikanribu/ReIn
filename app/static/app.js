@@ -353,6 +353,16 @@ async function renderVersion(treatyId, versionNumber) {
         ${v.reviewed_by ? `<dt>Reviewed</dt><dd>${esc(v.reviewed_by)} · ${new Date(v.reviewed_at).toLocaleString()}${v.review_note ? " — " + esc(v.review_note) : ""}</dd>` : ""}
       </dl>
     </div>
+    ${v.source_document_id ? `<div class="panel">
+      <div class="row" style="justify-content:space-between">
+        <h2 style="margin:0">Source document</h2>
+        <div class="row">
+          <button class="secondary" id="btn-toggle-doc">Show document</button>
+          <a class="ghost" href="/documents/${v.source_document_id}/file" target="_blank" rel="noopener">Open in new tab ↗</a>
+        </div>
+      </div>
+      <div id="doc-viewer" hidden style="margin-top:12px"></div>
+    </div>` : ""}
     ${isDraft ? `<div class="banner warn">This is a <b>draft</b>. Verify each data point against its source quote,
       correct anything wrong, then approve or reject. Values are not used downstream until approved.</div>` : ""}
     ${diffBanner}
@@ -376,6 +386,37 @@ async function renderVersion(treatyId, versionNumber) {
   }
   hideEmpty.onchange = applyFilter;
   applyFilter();
+
+  // Source-document viewer (lazy-loads the file on first Show)
+  const docToggle = document.getElementById("btn-toggle-doc");
+  if (docToggle) {
+    const viewer = document.getElementById("doc-viewer");
+    const fileUrl = `/documents/${v.source_document_id}/file`;
+    docToggle.onclick = async () => {
+      const showing = !viewer.hidden;
+      if (showing) {
+        viewer.hidden = true;
+        docToggle.textContent = "Show document";
+        return;
+      }
+      if (!viewer.dataset.loaded) {
+        // Verify the file exists before embedding, to show a clean message.
+        const head = await fetch(fileUrl, { method: "GET", headers: { Range: "bytes=0-0" } });
+        if (!head.ok) {
+          let msg = "The source file is not available.";
+          try { msg = (await head.json()).detail || msg; } catch { /* keep default */ }
+          viewer.innerHTML = `<div class="banner warn">${esc(msg)}</div>`;
+        } else {
+          viewer.innerHTML =
+            `<iframe src="${fileUrl}" title="Source document" ` +
+            `style="width:100%;height:640px;border:1px solid var(--border);border-radius:8px"></iframe>`;
+        }
+        viewer.dataset.loaded = "1";
+      }
+      viewer.hidden = false;
+      docToggle.textContent = "Hide document";
+    };
+  }
 
   // Review actions
   const actions = document.getElementById("review-actions");

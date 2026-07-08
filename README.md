@@ -145,6 +145,7 @@ curl http://localhost:8000/audit/verify           # proves the trail is untamper
 | Method & path | Purpose |
 |---|---|
 | `POST /documents` | Upload a treaty or amendment document (PDF/DOCX/TXT) |
+| `GET /documents/{id}/file` | View/download the original uploaded file (PDFs render inline) |
 | `GET /catalog` | The defined data-point catalog |
 | `POST /extractions` | Parse a treaty document → new treaty, draft v1 |
 | `GET /treaties`, `GET /treaties/{id}` | List/inspect treaties and their versions |

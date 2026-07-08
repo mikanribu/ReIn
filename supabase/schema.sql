@@ -6,13 +6,15 @@
 -- Keep in sync with app/models.py (the ORM is the source of truth).
 
 create table if not exists documents (
-    id          varchar(36) primary key,
-    filename    varchar(512) not null,
-    kind        varchar(32)  not null check (kind in ('treaty', 'amendment')),
-    content_text text        not null,
-    sha256      varchar(64)  not null,
-    uploaded_by varchar(256) not null default 'system',
-    created_at  timestamptz  not null default now()
+    id            varchar(36) primary key,
+    filename      varchar(512) not null,
+    kind          varchar(32)  not null check (kind in ('treaty', 'amendment')),
+    content_text  text        not null,
+    content_bytes bytea,                       -- original uploaded file (for viewing)
+    content_type  varchar(128),                -- MIME type of the original file
+    sha256        varchar(64)  not null,
+    uploaded_by   varchar(256) not null default 'system',
+    created_at    timestamptz  not null default now()
 );
 create index if not exists idx_documents_sha256 on documents (sha256);
 

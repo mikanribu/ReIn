@@ -14,7 +14,7 @@ Design principles
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import JSON, Float, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import JSON, Float, ForeignKey, Integer, LargeBinary, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -59,6 +59,11 @@ class Document(Base):
     filename: Mapped[str] = mapped_column(String(512))
     kind: Mapped[str] = mapped_column(String(32))  # 'treaty' | 'amendment'
     content_text: Mapped[str] = mapped_column(Text)
+    # Original uploaded bytes + MIME type, so the source document can be
+    # viewed/downloaded in the UI (nullable: docs uploaded before this was
+    # added, or very large files, may not carry the raw bytes).
+    content_bytes: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
+    content_type: Mapped[str | None] = mapped_column(String(128), nullable=True)
     sha256: Mapped[str] = mapped_column(String(64), index=True)
     uploaded_by: Mapped[str] = mapped_column(String(256), default="system")
     created_at: Mapped[datetime] = mapped_column(default=utcnow)
