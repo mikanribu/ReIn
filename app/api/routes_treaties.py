@@ -25,6 +25,7 @@ from app.schemas.treaty_fields import field_catalog
 from app.services import audit as audit_service
 from app.services import extraction as extraction_service
 from app.services import treaties as treaty_service
+from app.services.errors import translate_llm_errors
 from app.services.llm import get_chat_model
 
 router = APIRouter(tags=["treaties"])
@@ -70,7 +71,8 @@ def run_extraction(
     then approve the version.
     """
     doc = _get_document(db, payload.document_id, "treaty")
-    extraction = extraction_service.extract_treaty(llm, doc.content_text)
+    with translate_llm_errors("extract the treaty"):
+        extraction = extraction_service.extract_treaty(llm, doc.content_text)
     version = treaty_service.create_treaty_from_extraction(
         db, doc, extraction, actor=payload.actor, reference_override=payload.treaty_reference
     )
@@ -166,9 +168,10 @@ def amend_from_document(
     base = treaty_service.latest_approved_version(db, treaty_id)
     if base is None:
         raise HTTPException(409, "This treaty has no approved version to amend yet.")
-    amendment = extraction_service.extract_amendment(
-        llm, doc.content_text, treaty_service.values_dict(base)
-    )
+    with translate_llm_errors("parse the amendment"):
+        amendment = extraction_service.extract_amendment(
+            llm, doc.content_text, treaty_service.values_dict(base)
+        )
     version = treaty_service.create_amendment_from_document(db, treaty, doc, amendment, payload.actor)
     return _version_detail(version)
 
