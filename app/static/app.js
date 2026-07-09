@@ -143,8 +143,20 @@ window.addEventListener("hashchange", route);
 // Home: treaty list + upload & extract
 // ---------------------------------------------------------------------------
 
+function kpiTile(value, label, { sub = "", cls = "" } = {}) {
+  return `<div class="kpi ${cls}">
+    <span class="kpi-value">${value}</span>
+    <span class="kpi-label">${esc(label)}</span>
+    ${sub ? `<span class="kpi-sub">${esc(sub)}</span>` : ""}
+  </div>`;
+}
+
 async function renderHome() {
-  const treaties = await api("/treaties");
+  // Stats and treaties in parallel; stats are best-effort (never block the page).
+  const [treaties, stats] = await Promise.all([
+    api("/treaties"),
+    api("/stats").catch(() => null),
+  ]);
   const rows = treaties.map((t) => {
     const latest = t.versions[t.versions.length - 1];
     const approved = [...t.versions].reverse().find((v) => v.status === "approved");
@@ -157,7 +169,17 @@ async function renderHome() {
     </tr>`;
   }).join("");
 
+  const kpis = stats ? `<div class="kpis">
+    ${kpiTile(stats.treaties, "Treaties", { cls: "accent" })}
+    ${kpiTile(stats.in_force, "In force", { sub: `${stats.approved_versions} approved version${stats.approved_versions === 1 ? "" : "s"}`, cls: "ok" })}
+    ${kpiTile(stats.awaiting_review, "Awaiting review", { sub: "draft versions", cls: stats.awaiting_review ? "warn" : "" })}
+    ${kpiTile(stats.amendments, "Amendments")}
+    ${kpiTile(stats.documents, "Documents")}
+    ${kpiTile(stats.audit_entries, "Audit entries")}
+  </div>` : "";
+
   view.innerHTML = `
+    ${kpis}
     <div class="panel">
       <h2>New treaty from document</h2>
       <p class="muted small">Upload a treaty wording (PDF, DOCX or TXT). The parser extracts every

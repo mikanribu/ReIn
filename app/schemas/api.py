@@ -158,3 +158,17 @@ class CurrentValuesOut(BaseModel):
     version_number: int
     approved_at: Optional[datetime]
     values: dict[str, FieldValue]
+
+
+# --- Dashboard KPIs -----------------------------------------------------------
+
+class StatsOut(BaseModel):
+    """High-level counts for the home dashboard tiles."""
+
+    treaties: int                # total treaties
+    in_force: int                # treaties with an approved version
+    awaiting_review: int         # draft versions pending approval
+    amendments: int              # versions created by document or manual amendment
+    approved_versions: int       # total approved versions
+    documents: int               # documents uploaded
+    audit_entries: int           # audit-trail entries
