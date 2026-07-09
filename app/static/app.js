@@ -175,7 +175,6 @@ async function renderHome() {
     ${kpiTile(stats.awaiting_review, "Awaiting review", { sub: "draft versions", cls: stats.awaiting_review ? "warn" : "" })}
     ${kpiTile(stats.amendments, "Amendments")}
     ${kpiTile(stats.documents, "Documents")}
-    ${kpiTile(stats.audit_entries, "Audit entries")}
   </div>` : "";
 
   view.innerHTML = `
