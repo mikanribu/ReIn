@@ -160,6 +160,25 @@ class CurrentValuesOut(BaseModel):
     values: dict[str, FieldValue]
 
 
+# --- Chat assistant -----------------------------------------------------------
+
+class ChatMessage(BaseModel):
+    role: str = Field(..., description="'user' or 'assistant'.")
+    content: str
+
+
+class ChatRequest(BaseModel):
+    messages: list[ChatMessage] = Field(..., description="Conversation so far (oldest first).")
+    treaty_id: Optional[str] = Field(
+        None, description="If set, the assistant is grounded in this treaty's data."
+    )
+
+
+class ChatResponse(BaseModel):
+    reply: str
+    grounded_in_treaty: bool
+
+
 # --- Dashboard KPIs -----------------------------------------------------------
 
 class StatsOut(BaseModel):

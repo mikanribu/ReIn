@@ -624,4 +624,155 @@ document.addEventListener("change", (e) => {
   }
 });
 
+// ---------------------------------------------------------------------------
+// Chat assistant (floating pop-up)
+//
+// Injected once into <body> so it survives SPA re-renders. On a treaty page it
+// posts the treaty id so answers are grounded in that treaty's data; elsewhere
+// it's a general reinsurance / how-to-use-the-app assistant. The model is
+// called with no tools bound (server side), so it has no web access.
+// ---------------------------------------------------------------------------
+
+function initChat() {
+  // The treaty currently open (if any), read live from the hash at send time.
+  const treatyIdFromHash = () => {
+    const m = (location.hash || "").match(/^#\/treaty\/([^/]+)/);
+    return m ? m[1] : null;
+  };
+
+  const wrap = document.createElement("div");
+  wrap.id = "chat";
+  wrap.innerHTML = `
+    <button id="chat-launch" title="Ask the treaty assistant" aria-label="Open assistant">
+      <span class="chat-launch-icon">💬</span>
+      <span class="chat-launch-text">Ask</span>
+    </button>
+    <section id="chat-panel" hidden aria-label="Treaty assistant">
+      <header class="chat-head">
+        <div class="chat-title">
+          <b>TreatyIQ Assistant</b>
+          <span id="chat-context" class="chat-context"></span>
+        </div>
+        <button id="chat-close" class="chat-icon-btn" title="Close" aria-label="Close">×</button>
+      </header>
+      <div id="chat-log" class="chat-log"></div>
+      <form id="chat-form" class="chat-form">
+        <textarea id="chat-input" rows="1" placeholder="Ask a question…"
+          autocomplete="off"></textarea>
+        <button type="submit" id="chat-send" title="Send">Send</button>
+      </form>
+    </section>`;
+  document.body.appendChild(wrap);
+
+  const panel = wrap.querySelector("#chat-panel");
+  const launch = wrap.querySelector("#chat-launch");
+  const log = wrap.querySelector("#chat-log");
+  const form = wrap.querySelector("#chat-form");
+  const input = wrap.querySelector("#chat-input");
+  const sendBtn = wrap.querySelector("#chat-send");
+  const contextEl = wrap.querySelector("#chat-context");
+
+  // Conversation history sent to the API: [{role, content}, ...].
+  const history = [];
+  let busy = false;
+
+  function renderText(text) {
+    // Escape, then turn newlines into <br> and "- " lines into bullets.
+    return esc(text).replace(/\n/g, "<br>");
+  }
+
+  function addMessage(role, content, { typing = false } = {}) {
+    const el = document.createElement("div");
+    el.className = `chat-msg ${role}` + (typing ? " typing" : "");
+    el.innerHTML = typing
+      ? '<span class="chat-dots"><span></span><span></span><span></span></span>'
+      : renderText(content);
+    log.appendChild(el);
+    log.scrollTop = log.scrollHeight;
+    return el;
+  }
+
+  // Reflect where the assistant is grounded, and greet on first open per context.
+  function updateContext() {
+    const onTreaty = !!treatyIdFromHash();
+    contextEl.textContent = onTreaty ? "Grounded in this treaty" : "General assistant";
+    contextEl.className = "chat-context" + (onTreaty ? " grounded" : "");
+  }
+
+  function greet() {
+    if (log.childElementCount > 0) return;
+    const onTreaty = !!treatyIdFromHash();
+    addMessage("assistant", onTreaty
+      ? "Hi! Ask me anything about this treaty — its terms, versions, or what changed in an amendment."
+      : "Hi! I can help with reinsurance concepts and how to use TreatyIQ. Open a treaty to ask about its specific values.");
+  }
+
+  function openPanel() {
+    panel.hidden = false;
+    launch.classList.add("open");
+    updateContext();
+    greet();
+    input.focus();
+  }
+  function closePanel() {
+    panel.hidden = true;
+    launch.classList.remove("open");
+  }
+
+  launch.onclick = () => (panel.hidden ? openPanel() : closePanel());
+  wrap.querySelector("#chat-close").onclick = closePanel;
+
+  // Auto-grow the input up to a few lines.
+  input.addEventListener("input", () => {
+    input.style.height = "auto";
+    input.style.height = Math.min(input.scrollHeight, 120) + "px";
+  });
+  // Enter sends, Shift+Enter inserts a newline.
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      form.requestSubmit();
+    }
+  });
+
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const text = input.value.trim();
+    if (!text || busy) return;
+    busy = true;
+    sendBtn.disabled = true;
+    input.value = "";
+    input.style.height = "auto";
+
+    addMessage("user", text);
+    history.push({ role: "user", content: text });
+    const typing = addMessage("assistant", "", { typing: true });
+
+    try {
+      const body = await post("/chat", {
+        messages: history,
+        treaty_id: treatyIdFromHash(),
+      });
+      typing.remove();
+      addMessage("assistant", body.reply);
+      history.push({ role: "assistant", content: body.reply });
+    } catch (err) {
+      typing.remove();
+      const el = addMessage("assistant", "Sorry — " + err.message);
+      el.classList.add("error");
+    } finally {
+      busy = false;
+      sendBtn.disabled = false;
+      input.focus();
+    }
+  });
+
+  // Keep the grounding label in sync as the user navigates the SPA.
+  window.addEventListener("hashchange", () => {
+    if (!panel.hidden) updateContext();
+  });
+}
+
+initChat();
+
 route();

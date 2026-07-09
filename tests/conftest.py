@@ -121,9 +121,14 @@ class FakeStructuredRunnable:
         return self._result
 
 
+class FakeAIMessage:
+    def __init__(self, content):
+        self.content = content
+
+
 class FakeChatModel:
-    """Duck-typed stand-in for a LangChain chat model: only implements
-    with_structured_output, which is all the extraction service uses."""
+    """Duck-typed stand-in for a LangChain chat model. Implements
+    with_structured_output (used by extraction) and invoke (used by chat)."""
 
     def with_structured_output(self, schema):
         from app.schemas.treaty_fields import AmendmentExtraction as AE
@@ -135,18 +140,34 @@ class FakeChatModel:
             return FakeStructuredRunnable(make_fake_amendment())
         raise AssertionError(f"Unexpected schema: {schema}")
 
+    def invoke(self, messages):
+        # Echo back whether treaty context was injected, so chat tests can
+        # assert grounding without a real model.
+        system = messages[0].content if messages else ""
+        last_user = next((m.content for m in reversed(messages)
+                          if type(m).__name__ == "HumanMessage"), "")
+        grounded = "TREATY CONTEXT" in system
+        return FakeAIMessage(
+            f"[fake reply|grounded={grounded}] You asked: {last_user}"
+        )
 
-@pytest.fixture(scope="session")
+
+@pytest.fixture(scope="module")
 def client() -> TestClient:
     # Point the app at a throwaway SQLite file BEFORE anything imports settings.
+    # Module scope + a fresh engine give each test file an isolated database, so
+    # treaties created in one module don't perturb another's counts.
     tmpdir = tempfile.mkdtemp(prefix="rein-test-")
     os.environ["DATABASE_URL"] = f"sqlite:///{tmpdir}/test.db"
 
+    from app import database
     from app.config import get_settings
     from app.main import create_app
     from app.services.llm import get_chat_model
 
     get_settings.cache_clear()
+    database._engine = None
+    database._SessionLocal = None
     app = create_app()
     app.dependency_overrides[get_chat_model] = lambda: FakeChatModel()
 

@@ -6,6 +6,7 @@ from fastapi import FastAPI
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
+from app.api.routes_chat import router as chat_router
 from app.api.routes_documents import router as documents_router
 from app.api.routes_treaties import router as treaties_router
 from app.database import init_db
@@ -34,6 +35,7 @@ def create_app() -> FastAPI:
     )
     app.include_router(documents_router)
     app.include_router(treaties_router)
+    app.include_router(chat_router)
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
     @app.get("/", include_in_schema=False)
