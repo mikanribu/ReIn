@@ -679,9 +679,38 @@ function initChat() {
   const history = [];
   let busy = false;
 
+  // Inline markdown on already-escaped text: **bold**, *italic*, `code`.
+  // Bold is resolved before italic so "**x**" doesn't leave stray asterisks.
+  function renderInline(s) {
+    return s
+      .replace(/\*\*([^*]+?)\*\*/g, "<strong>$1</strong>")
+      .replace(/\*([^*\n]+?)\*/g, "<em>$1</em>")
+      .replace(/`([^`\n]+?)`/g, "<code>$1</code>");
+  }
+
+  // A minimal Markdown renderer for the assistant's replies: bullet lists
+  // (- or * lines), paragraphs, and inline formatting. Escapes first, so no
+  // model output can inject HTML.
   function renderText(text) {
-    // Escape, then turn newlines into <br> and "- " lines into bullets.
-    return esc(text).replace(/\n/g, "<br>");
+    const lines = esc(text).split("\n");
+    const out = [];
+    let inList = false;
+    const closeList = () => { if (inList) { out.push("</ul>"); inList = false; } };
+    for (const line of lines) {
+      const bullet = line.match(/^\s*[-*]\s+(.*)$/);
+      if (bullet) {
+        if (!inList) { out.push("<ul>"); inList = true; }
+        out.push(`<li>${renderInline(bullet[1])}</li>`);
+      } else if (line.trim() === "") {
+        closeList();
+        out.push('<span class="chat-gap"></span>');
+      } else {
+        closeList();
+        out.push(`<div>${renderInline(line)}</div>`);
+      }
+    }
+    closeList();
+    return out.join("");
   }
 
   function addMessage(role, content, { typing = false, citations = [] } = {}) {
