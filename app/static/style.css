@@ -263,6 +263,20 @@ tr.clickable:hover { background: var(--accent-soft); }
 }
 .chat-msg.error { background: var(--bad-soft); color: var(--bad); border-color: #f2b8b5; }
 
+/* Source citations under a grounded answer. */
+.chat-cite {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
+  margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border);
+}
+.chat-cite-label {
+  font-size: 10.5px; text-transform: uppercase; letter-spacing: .05em;
+  color: var(--muted); margin-right: 2px;
+}
+.chat-cite .cite {
+  font-size: 11.5px; padding: 2px 8px; border-radius: 999px;
+  background: var(--accent-soft); color: var(--accent); white-space: nowrap;
+}
+
 .chat-dots { display: inline-flex; gap: 4px; padding: 2px 0; }
 .chat-dots span {
   width: 6px; height: 6px; border-radius: 50%; background: var(--muted);

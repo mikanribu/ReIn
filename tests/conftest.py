@@ -142,14 +142,18 @@ class FakeChatModel:
 
     def invoke(self, messages):
         # Echo back whether treaty context was injected, so chat tests can
-        # assert grounding without a real model.
+        # assert grounding without a real model. When grounded, append a
+        # SOURCES line naming a real field label so citation parsing is exercised.
         system = messages[0].content if messages else ""
         last_user = next((m.content for m in reversed(messages)
                           if type(m).__name__ == "HumanMessage"), "")
         grounded = "TREATY CONTEXT" in system
-        return FakeAIMessage(
-            f"[fake reply|grounded={grounded}] You asked: {last_user}"
-        )
+        reply = f"[fake reply|grounded={grounded}] You asked: {last_user}"
+        if grounded:
+            # 'Limit' is a real field label in the seeded treaty; 'Bogus Field'
+            # is not and must be filtered out by the service.
+            reply += "\nSOURCES: Limit; Bogus Field"
+        return FakeAIMessage(reply)
 
 
 @pytest.fixture(scope="module")

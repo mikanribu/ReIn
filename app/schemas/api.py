@@ -177,6 +177,10 @@ class ChatRequest(BaseModel):
 class ChatResponse(BaseModel):
     reply: str
     grounded_in_treaty: bool
+    citations: list[str] = Field(
+        default_factory=list,
+        description="Treaty field labels the answer drew on (grounded replies only).",
+    )
 
 
 # --- Dashboard KPIs -----------------------------------------------------------

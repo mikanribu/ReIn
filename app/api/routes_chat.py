@@ -23,7 +23,9 @@ def chat(
     if not payload.messages:
         raise HTTPException(422, "messages must not be empty")
     with translate_llm_errors("answer the question"):
-        reply, grounded = chat_service.answer(
+        reply, grounded, citations = chat_service.answer(
             llm, db, payload.messages, payload.treaty_id
         )
-    return ChatResponse(reply=reply, grounded_in_treaty=grounded)
+    return ChatResponse(
+        reply=reply, grounded_in_treaty=grounded, citations=citations
+    )

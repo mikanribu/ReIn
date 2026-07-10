@@ -35,6 +35,34 @@ def test_chat_grounded_in_treaty(client):
     body = resp.json()
     assert body["grounded_in_treaty"] is True
     assert "grounded=True" in body["reply"]
+    # The fake model appends "SOURCES: Limit; Bogus Field"; the service keeps
+    # the real label, drops the fabricated one, and strips the line from the reply.
+    assert body["citations"] == ["Limit"]
+    assert "SOURCES" not in body["reply"]
+
+
+def test_chat_general_has_no_citations(client):
+    resp = client.post("/chat", json={
+        "messages": [{"role": "user", "content": "What is a treaty?"}],
+    })
+    assert resp.json()["citations"] == []
+
+
+def test_extract_sources_filters_and_strips():
+    from app.services.chat import _extract_sources
+    reply = "The limit is CHF 40m and retention CHF 10m.\nSOURCES: Limit; Retention; Made Up"
+    clean, cites = _extract_sources(reply, ["Limit", "Retention", "Currency"])
+    assert cites == ["Limit", "Retention"]
+    assert "SOURCES" not in clean
+    assert clean.endswith("CHF 10m.")
+
+
+def test_extract_sources_absent_line_is_noop():
+    from app.services.chat import _extract_sources
+    reply = "A general answer with no sources line."
+    clean, cites = _extract_sources(reply, ["Limit"])
+    assert clean == reply
+    assert cites == []
 
 
 def test_chat_empty_messages_rejected(client):

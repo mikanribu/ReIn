@@ -653,6 +653,7 @@ function initChat() {
           <b>TreatyIQ Assistant</b>
           <span id="chat-context" class="chat-context"></span>
         </div>
+        <button id="chat-new" class="chat-icon-btn" title="New conversation" aria-label="New conversation">⟳</button>
         <button id="chat-close" class="chat-icon-btn" title="Close" aria-label="Close">×</button>
       </header>
       <div id="chat-log" class="chat-log"></div>
@@ -681,12 +682,21 @@ function initChat() {
     return esc(text).replace(/\n/g, "<br>");
   }
 
-  function addMessage(role, content, { typing = false } = {}) {
+  function addMessage(role, content, { typing = false, citations = [] } = {}) {
     const el = document.createElement("div");
     el.className = `chat-msg ${role}` + (typing ? " typing" : "");
-    el.innerHTML = typing
-      ? '<span class="chat-dots"><span></span><span></span><span></span></span>'
-      : renderText(content);
+    if (typing) {
+      el.innerHTML = '<span class="chat-dots"><span></span><span></span><span></span></span>';
+    } else {
+      el.innerHTML = renderText(content);
+      if (citations.length) {
+        const cite = document.createElement("div");
+        cite.className = "chat-cite";
+        cite.innerHTML = '<span class="chat-cite-label">Sources</span>' +
+          citations.map((c) => `<span class="cite">${esc(c)}</span>`).join("");
+        el.appendChild(cite);
+      }
+    }
     log.appendChild(el);
     log.scrollTop = log.scrollHeight;
     return el;
@@ -719,8 +729,16 @@ function initChat() {
     launch.classList.remove("open");
   }
 
+  function newConversation() {
+    history.length = 0;
+    log.innerHTML = "";
+    greet();
+    input.focus();
+  }
+
   launch.onclick = () => (panel.hidden ? openPanel() : closePanel());
   wrap.querySelector("#chat-close").onclick = closePanel;
+  wrap.querySelector("#chat-new").onclick = newConversation;
 
   // Auto-grow the input up to a few lines.
   input.addEventListener("input", () => {
@@ -754,7 +772,7 @@ function initChat() {
         treaty_id: treatyIdFromHash(),
       });
       typing.remove();
-      addMessage("assistant", body.reply);
+      addMessage("assistant", body.reply, { citations: body.citations || [] });
       history.push({ role: "assistant", content: body.reply });
     } catch (err) {
       typing.remove();

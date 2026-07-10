@@ -30,16 +30,29 @@ Rules:
   rather than inventing figures. Never fabricate treaty numbers.
 """
 
+# Appended only when a treaty context is present, so the assistant declares
+# which fields it used. We validate the labels against the treaty's real fields
+# afterwards, so a hallucinated label is dropped rather than shown.
+CITATION_INSTRUCTION = """\
+When your answer uses specific values from the TREATY CONTEXT above, finish your
+reply with a single final line listing the exact field labels you used, formatted
+exactly as:
+SOURCES: Field Label; Another Field Label
+Use the field labels exactly as they appear in the context. Do not invent labels.
+If your answer doesn't rely on any specific field, omit the SOURCES line entirely.
+"""
 
-def _treaty_context(db: Session, treaty_id: str) -> str | None:
-    """Build a readable context block for one treaty, or None if not found."""
+
+def _treaty_context(db: Session, treaty_id: str) -> tuple[str, list[str]] | None:
+    """Build a readable context block for one treaty and the list of field
+    labels it exposes, or None if the treaty isn't found."""
     treaty = db.get(Treaty, treaty_id)
     if treaty is None:
         return None
 
     versions = sorted(treaty.versions, key=lambda v: v.version_number)
     if not versions:
-        return f"Treaty {treaty.reference} — {treaty.name}. No versions yet."
+        return f"Treaty {treaty.reference} — {treaty.name}. No versions yet.", []
 
     latest = versions[-1]
     approved = next((v for v in reversed(versions)
@@ -58,13 +71,40 @@ def _treaty_context(db: Session, treaty_id: str) -> str | None:
         "",
         f"Data points (from the latest version, v{latest.version_number} [{latest.status}]):",
     ]
+    labels: list[str] = []
     for dp in sorted(latest.data_points, key=lambda d: d.field_label):
         if dp.value is None:
             continue
+        labels.append(dp.field_label)
         loc = f" [{dp.source_location}]" if dp.source_location else ""
         lines.append(f"- {dp.field_label}: {dp.value}{loc}")
     lines.append("=== END TREATY CONTEXT ===")
-    return "\n".join(lines)
+    return "\n".join(lines), labels
+
+
+def _extract_sources(reply: str, valid_labels: list[str]) -> tuple[str, list[str]]:
+    """Pull a trailing ``SOURCES: a; b`` line off the reply, keeping only labels
+    that match a real field (case-insensitive). Returns (clean_reply, citations)."""
+    if not valid_labels:
+        return reply, []
+    lines = reply.splitlines()
+    # Only the last non-empty line counts; sources must sit at the very end.
+    for i in range(len(lines) - 1, -1, -1):
+        line = lines[i].strip()
+        if not line:
+            continue
+        if line.upper().startswith("SOURCES:"):
+            raw = line.split(":", 1)[1]
+            by_lower = {label.lower(): label for label in valid_labels}
+            citations: list[str] = []
+            for part in raw.split(";"):
+                canonical = by_lower.get(part.strip().lower())
+                if canonical and canonical not in citations:
+                    citations.append(canonical)
+            clean = "\n".join(lines[:i]).rstrip()
+            return clean, citations
+        break  # a non-empty, non-SOURCES last line → nothing to extract
+    return reply, []
 
 
 def _to_lc_messages(system: str, history: list[ChatMessage]):
@@ -82,14 +122,16 @@ def answer(
     db: Session,
     history: list[ChatMessage],
     treaty_id: str | None,
-) -> tuple[str, bool]:
-    """Return (reply_text, grounded_in_treaty)."""
+) -> tuple[str, bool, list[str]]:
+    """Return (reply_text, grounded_in_treaty, cited_field_labels)."""
     system = GENERAL_SYSTEM
     grounded = False
+    labels: list[str] = []
     if treaty_id:
         ctx = _treaty_context(db, treaty_id)
         if ctx:
-            system = f"{GENERAL_SYSTEM}\n\n{ctx}"
+            context_str, labels = ctx
+            system = f"{GENERAL_SYSTEM}\n\n{context_str}\n\n{CITATION_INSTRUCTION}"
             grounded = True
 
     # No tools are bound → the model cannot browse the web or take actions.
@@ -98,4 +140,5 @@ def answer(
     if isinstance(content, list):  # some providers return content parts
         content = "".join(part.get("text", "") if isinstance(part, dict) else str(part)
                           for part in content)
-    return content.strip(), grounded
+    reply, citations = _extract_sources(content.strip(), labels)
+    return reply, grounded, citations
