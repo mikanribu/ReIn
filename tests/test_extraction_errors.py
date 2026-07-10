@@ -23,11 +23,11 @@ def failing_client() -> TestClient:
 
     from app.config import get_settings
     from app.main import create_app
-    from app.services.llm import get_chat_model
+    from app.services.llm import get_extraction_model
 
     get_settings.cache_clear()
     app = create_app()
-    app.dependency_overrides[get_chat_model] = lambda: _ConnErrorLLM()
+    app.dependency_overrides[get_extraction_model] = lambda: _ConnErrorLLM()
     with TestClient(app, raise_server_exceptions=False) as c:
         yield c
 

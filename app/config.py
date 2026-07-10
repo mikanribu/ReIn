@@ -5,6 +5,7 @@ All configuration is environment-driven so the same code runs locally
 """
 from functools import lru_cache
 from pathlib import Path
+from typing import Literal
 
 from pydantic import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -21,8 +22,9 @@ class Settings(BaseSettings):
     database_url: str = "sqlite:///./rein.db"
 
     # --- LLM provider selection -------------------------------------------
-    # Which backend performs extraction: 'anthropic', 'ollama' or 'azure_openai'.
-    llm_provider: str = "anthropic"
+    # Chat assistant defaults to Ollama; extraction defaults to Anthropic.
+    chat_llm_provider: Literal["anthropic", "ollama", "azure_openai"] = "ollama"
+    extraction_llm_provider: Literal["anthropic", "ollama", "azure_openai"] = "anthropic"
     llm_max_tokens: int = 16000
 
     # Anthropic (Claude)

@@ -238,11 +238,13 @@ tr.clickable:hover { background: var(--accent-soft); }
 .chat-head .chat-title b { font-size: 14px; }
 .chat-context { font-size: 11.5px; color: #9fb3d1; }
 .chat-context.grounded { color: #7ee2a8; }
+.chat-actions { margin-left: auto; display: flex; align-items: center; gap: 6px; }
 .chat-icon-btn {
-  margin-left: auto; background: transparent; color: #c9d6e8; border: 0;
+  background: transparent; color: #c9d6e8; border: 0;
   font-size: 22px; line-height: 1; padding: 0 4px; cursor: pointer;
 }
 .chat-icon-btn:hover { color: #fff; background: transparent; }
+.chat-new-icon { display: inline-block; font-size: 18px; line-height: 1; transform: translateY(-1px); }
 
 .chat-log {
   flex: 1; overflow-y: auto; padding: 14px;

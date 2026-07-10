@@ -36,7 +36,7 @@ from app.services import audit as audit_service
 from app.services import extraction as extraction_service
 from app.services import treaties as treaty_service
 from app.services.errors import translate_llm_errors
-from app.services.llm import get_chat_model
+from app.services.llm import get_extraction_model
 
 router = APIRouter(tags=["treaties"])
 
@@ -114,7 +114,7 @@ def get_stats(db: Session = Depends(get_db)) -> StatsOut:
 def run_extraction(
     payload: ExtractRequest,
     db: Session = Depends(get_db),
-    llm: BaseChatModel = Depends(get_chat_model),
+    llm: BaseChatModel = Depends(get_extraction_model),
 ) -> VersionDetail:
     """Parse a treaty document into a new treaty with a draft version.
 
@@ -211,7 +211,7 @@ def amend_from_document(
     treaty_id: str,
     payload: DocumentAmendmentRequest,
     db: Session = Depends(get_db),
-    llm: BaseChatModel = Depends(get_chat_model),
+    llm: BaseChatModel = Depends(get_extraction_model),
 ) -> VersionDetail:
     """Parse an adjustment/endorsement document and create a new draft version
     with the changed data points flagged for review."""

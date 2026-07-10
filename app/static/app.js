@@ -1,4 +1,4 @@
-/* ReIn UI — vanilla JS single-page app over the ReIn API. No build step.
+/* TReatyIQ UI — vanilla JS single-page app over the TReatyIQ API. No build step.
  *
  * Routes:
  *   #/                       treaty list + upload & extract
@@ -653,8 +653,10 @@ function initChat() {
           <b>TreatyIQ Assistant</b>
           <span id="chat-context" class="chat-context"></span>
         </div>
-        <button id="chat-new" class="chat-icon-btn" title="New conversation" aria-label="New conversation">⟳</button>
-        <button id="chat-close" class="chat-icon-btn" title="Close" aria-label="Close">×</button>
+        <div class="chat-actions">
+          <button id="chat-new" class="chat-icon-btn" title="New conversation" aria-label="New conversation"><span class="chat-new-icon" aria-hidden="true">✎</span></button>
+          <button id="chat-close" class="chat-icon-btn" title="Close" aria-label="Close">×</button>
+        </div>
       </header>
       <div id="chat-log" class="chat-log"></div>
       <form id="chat-form" class="chat-form">

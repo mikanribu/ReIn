@@ -167,13 +167,14 @@ def client() -> TestClient:
     from app import database
     from app.config import get_settings
     from app.main import create_app
-    from app.services.llm import get_chat_model
+    from app.services.llm import get_chat_model, get_extraction_model
 
     get_settings.cache_clear()
     database._engine = None
     database._SessionLocal = None
     app = create_app()
     app.dependency_overrides[get_chat_model] = lambda: FakeChatModel()
+    app.dependency_overrides[get_extraction_model] = lambda: FakeChatModel()
 
     with TestClient(app) as c:
         yield c

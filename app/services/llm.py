@@ -1,12 +1,9 @@
-"""LLM factory.
+"""LLM factories.
 
-The chat model is created here and nowhere else, so switching providers
-(Anthropic / Ollama / Azure OpenAI) is driven entirely by configuration and
-the rest of the app is untouched. Extraction calls ``.with_structured_output``
-on whatever model this returns, which every supported provider implements.
-
-Provider is chosen by ``LLM_PROVIDER`` (see app/config.py). Provider SDKs are
-imported lazily so you only need the packages for the provider you use.
+Chat and extraction use separate provider settings so the app can keep a
+local Ollama assistant while using Anthropic for treaty parsing.
+Provider SDKs are imported lazily so you only need the packages you actually
+use.
 """
 from functools import lru_cache
 
@@ -23,19 +20,19 @@ def _secret(value) -> str | None:
 
 def _missing(pkg: str, provider: str) -> RuntimeError:
     return RuntimeError(
-        f"LLM_PROVIDER='{provider}' requires the '{pkg}' package. "
+        f"LLM provider '{provider}' requires the '{pkg}' package. "
         f"Install it with: pip install {pkg}"
     )
 
 
-def _build_anthropic(s: Settings) -> BaseChatModel:
+def _build_anthropic(s: Settings, purpose: str) -> BaseChatModel:
     try:
         from langchain_anthropic import ChatAnthropic
     except ImportError as exc:  # pragma: no cover - import guard
         raise _missing("langchain-anthropic", "anthropic") from exc
     key = _secret(s.anthropic_api_key)
     if not key:
-        raise RuntimeError("ANTHROPIC_API_KEY must be set in .env or the environment")
+        raise RuntimeError(f"ANTHROPIC_API_KEY must be set in .env or the environment for {purpose}")
     return ChatAnthropic(model=s.anthropic_model, api_key=key, max_tokens=s.llm_max_tokens)
 
 
@@ -63,7 +60,7 @@ def _build_azure_openai(s: Settings) -> BaseChatModel:
         ] if not val
     ]
     if missing:
-        raise RuntimeError(f"LLM_PROVIDER='azure_openai' requires: {', '.join(missing)}")
+        raise RuntimeError(f"Azure OpenAI provider requires: {', '.join(missing)}")
     return AzureChatOpenAI(
         azure_endpoint=s.azure_openai_endpoint,
         azure_deployment=s.azure_openai_deployment,
@@ -73,21 +70,33 @@ def _build_azure_openai(s: Settings) -> BaseChatModel:
     )
 
 
-_BUILDERS = {
-    "anthropic": _build_anthropic,
-    "ollama": _build_ollama,
-    "azure_openai": _build_azure_openai,
-}
-
-
 @lru_cache
 def get_chat_model() -> BaseChatModel:
     settings = get_settings()
-    provider = settings.llm_provider.strip().lower()
-    builder = _BUILDERS.get(provider)
-    if builder is None:
-        raise RuntimeError(
-            f"Unknown LLM_PROVIDER '{settings.llm_provider}'. "
-            f"Valid options: {', '.join(sorted(_BUILDERS))}."
-        )
-    return builder(settings)
+    provider = settings.chat_llm_provider.strip().lower()
+    if provider == "anthropic":
+        return _build_anthropic(settings, "chat")
+    if provider == "ollama":
+        return _build_ollama(settings)
+    if provider == "azure_openai":
+        return _build_azure_openai(settings)
+    raise RuntimeError(
+        f"Unknown CHAT_LLM_PROVIDER '{settings.chat_llm_provider}'. "
+        "Valid options: anthropic, ollama, azure_openai."
+    )
+
+
+@lru_cache
+def get_extraction_model() -> BaseChatModel:
+    settings = get_settings()
+    provider = settings.extraction_llm_provider.strip().lower()
+    if provider == "anthropic":
+        return _build_anthropic(settings, "extraction")
+    if provider == "ollama":
+        return _build_ollama(settings)
+    if provider == "azure_openai":
+        return _build_azure_openai(settings)
+    raise RuntimeError(
+        f"Unknown EXTRACTION_LLM_PROVIDER '{settings.extraction_llm_provider}'. "
+        "Valid options: anthropic, ollama, azure_openai."
+    )
