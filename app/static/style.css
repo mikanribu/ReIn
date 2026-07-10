@@ -266,6 +266,17 @@ tr.clickable:hover { background: var(--accent-soft); }
 }
 .chat-msg.error { background: var(--bad-soft); color: var(--bad); border-color: #f2b8b5; }
 
+/* Rendered markdown inside a chat bubble. */
+.chat-msg ul { margin: 4px 0; padding-left: 18px; }
+.chat-msg li { margin: 2px 0; }
+.chat-msg code {
+  font-family: var(--mono); font-size: 12px;
+  background: rgba(127, 127, 127, 0.14); padding: 1px 5px; border-radius: 4px;
+}
+.chat-msg.user code { background: rgba(255, 255, 255, 0.22); }
+.chat-msg .chat-gap { display: block; height: 8px; }
+.chat-msg > div + div { margin-top: 2px; }
+
 /* Source citations under a grounded answer. */
 .chat-cite {
   display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
