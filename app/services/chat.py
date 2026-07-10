@@ -8,10 +8,12 @@ it acts as a general reinsurance / how-to-use-the-app assistant.
 """
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models import Treaty, TreatyVersion
+from app.models import Treaty
 from app.schemas.api import ChatMessage
+from app.services.stats import compute_stats
 
 GENERAL_SYSTEM = """\
 You are TreatyIQ Assistant, a helpful expert on reinsurance treaties and on
@@ -19,16 +21,22 @@ using the TreatyIQ application (which parses treaties, extracts data points for
 human review, versions them, and records amendments).
 
 Rules:
-- Answer from the conversation, any treaty context provided below, and your own
-  general knowledge of reinsurance. You have NO internet access — never claim to
-  look anything up online, fetch URLs, or cite live sources.
+- Answer from the conversation, any context provided below, and your own general
+  knowledge of reinsurance. You have NO internet access — never claim to look
+  anything up online, fetch URLs, or cite live sources.
 - Be concise and practical. Use plain text (short paragraphs or bullet points).
-- If a question asks about a specific treaty's values and no treaty context is
-  provided, say you can only answer treaty-specific questions from within that
-  treaty's page.
+- A PORTFOLIO OVERVIEW may be provided with headline counts and each treaty's
+  status. Use it for questions about how many treaties there are, which need
+  review, which are in force, and similar high-level questions.
+- For a specific treaty's detailed terms (limits, premiums, clauses), tell the
+  user to open that treaty's page, where you can see its full data.
 - If the answer isn't in the provided context and you're not confident, say so
   rather than inventing figures. Never fabricate treaty numbers.
 """
+
+# How many treaties to list individually in the portfolio overview before we
+# stop (headline counts still cover the whole book).
+_MAX_TREATIES_LISTED = 60
 
 # Appended only when a treaty context is present, so the assistant declares
 # which fields it used. We validate the labels against the treaty's real fields
@@ -82,6 +90,49 @@ def _treaty_context(db: Session, treaty_id: str) -> tuple[str, list[str]] | None
     return "\n".join(lines), labels
 
 
+def _portfolio_context(db: Session) -> str:
+    """A book-wide overview: headline counts plus each treaty's status. Used
+    off a treaty page so the assistant can answer dashboard-level questions."""
+    s = compute_stats(db)
+    lines = [
+        "=== PORTFOLIO OVERVIEW (use for high-level questions across all treaties) ===",
+        f"Total treaties: {s.treaties}",
+        f"In force (have an approved version): {s.in_force}",
+        f"Awaiting review (draft versions to check): {s.awaiting_review}",
+        f"Amendments recorded: {s.amendments}",
+        f"Approved versions total: {s.approved_versions}",
+        f"Documents uploaded: {s.documents}",
+    ]
+
+    treaties = sorted(
+        db.scalars(select(Treaty)).all(),
+        key=lambda t: t.created_at, reverse=True,
+    )
+    if treaties:
+        lines.append("")
+        lines.append("Treaties (most recent first):")
+        for t in treaties[:_MAX_TREATIES_LISTED]:
+            versions = sorted(t.versions, key=lambda v: v.version_number)
+            latest = versions[-1] if versions else None
+            approved = next((v for v in reversed(versions)
+                             if v.status == "approved"), None)
+            if approved:
+                state = f"in force (v{approved.version_number})"
+                if latest and latest.status == "draft":
+                    state += "; a newer draft awaits review"
+            elif latest and latest.status == "draft":
+                state = "awaiting review (draft, not yet approved)"
+            elif latest:
+                state = f"latest v{latest.version_number} {latest.status}"
+            else:
+                state = "no versions yet"
+            lines.append(f"- {t.reference} — {t.name}: {state}")
+        if len(treaties) > _MAX_TREATIES_LISTED:
+            lines.append(f"…and {len(treaties) - _MAX_TREATIES_LISTED} more not listed.")
+    lines.append("=== END PORTFOLIO OVERVIEW ===")
+    return "\n".join(lines)
+
+
 def _extract_sources(reply: str, valid_labels: list[str]) -> tuple[str, list[str]]:
     """Pull a trailing ``SOURCES: a; b`` line off the reply, keeping only labels
     that match a real field (case-insensitive). Returns (clean_reply, citations)."""
@@ -127,12 +178,15 @@ def answer(
     system = GENERAL_SYSTEM
     grounded = False
     labels: list[str] = []
-    if treaty_id:
-        ctx = _treaty_context(db, treaty_id)
-        if ctx:
-            context_str, labels = ctx
-            system = f"{GENERAL_SYSTEM}\n\n{context_str}\n\n{CITATION_INSTRUCTION}"
-            grounded = True
+    ctx = _treaty_context(db, treaty_id) if treaty_id else None
+    if ctx:
+        context_str, labels = ctx
+        system = f"{GENERAL_SYSTEM}\n\n{context_str}\n\n{CITATION_INSTRUCTION}"
+        grounded = True
+    else:
+        # Off a treaty page (or unknown treaty): give the assistant the
+        # book-wide overview so it can answer dashboard-level questions.
+        system = f"{GENERAL_SYSTEM}\n\n{_portfolio_context(db)}"
 
     # No tools are bound → the model cannot browse the web or take actions.
     response = llm.invoke(_to_lc_messages(system, history))

@@ -148,7 +148,8 @@ class FakeChatModel:
         last_user = next((m.content for m in reversed(messages)
                           if type(m).__name__ == "HumanMessage"), "")
         grounded = "TREATY CONTEXT" in system
-        reply = f"[fake reply|grounded={grounded}] You asked: {last_user}"
+        portfolio = "PORTFOLIO OVERVIEW" in system
+        reply = f"[fake reply|grounded={grounded}|portfolio={portfolio}] You asked: {last_user}"
         if grounded:
             # 'Limit' is a real field label in the seeded treaty; 'Bogus Field'
             # is not and must be filtered out by the service.

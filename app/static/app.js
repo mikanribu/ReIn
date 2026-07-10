@@ -716,7 +716,7 @@ function initChat() {
     const onTreaty = !!treatyIdFromHash();
     addMessage("assistant", onTreaty
       ? "Hi! Ask me anything about this treaty — its terms, versions, or what changed in an amendment."
-      : "Hi! I can help with reinsurance concepts and how to use TreatyIQ. Open a treaty to ask about its specific values.");
+      : "Hi! Ask me about your portfolio — how many treaties you have, which are in force, which need review — or about reinsurance concepts and using TreatyIQ. Open a treaty to ask about its specific values.");
   }
 
   function openPanel() {

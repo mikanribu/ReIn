@@ -48,6 +48,32 @@ def test_chat_general_has_no_citations(client):
     assert resp.json()["citations"] == []
 
 
+def test_chat_general_has_portfolio_context(client):
+    # Off a treaty page the assistant is given the book-wide overview so it can
+    # answer dashboard questions ("how many treaties", "which need review").
+    _make_treaty(client)
+    resp = client.post("/chat", json={
+        "messages": [{"role": "user", "content": "How many treaties are there?"}],
+    })
+    body = resp.json()
+    assert body["grounded_in_treaty"] is False
+    assert "portfolio=True" in body["reply"]
+
+
+def test_portfolio_context_lists_treaties(client):
+    _make_treaty(client)
+    from sqlalchemy.orm import Session
+
+    from app.database import get_engine
+    from app.services.chat import _portfolio_context
+    with Session(get_engine()) as db:
+        ctx = _portfolio_context(db)
+    assert "PORTFOLIO OVERVIEW" in ctx
+    assert "Total treaties:" in ctx
+    assert "Awaiting review" in ctx
+    assert "CAT-XL-2026-001" in ctx
+
+
 def test_extract_sources_filters_and_strips():
     from app.services.chat import _extract_sources
     reply = "The limit is CHF 40m and retention CHF 10m.\nSOURCES: Limit; Retention; Made Up"

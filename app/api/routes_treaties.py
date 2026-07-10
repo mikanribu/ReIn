@@ -4,15 +4,12 @@ from langchain_core.language_models.chat_models import BaseChatModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from sqlalchemy import func
-
 from app.database import get_db
 from app.models import (
     AuditLog,
     Document,
     Treaty,
     TreatyVersion,
-    VersionOrigin,
     VersionStatus,
 )
 from app.schemas.api import (
@@ -34,6 +31,7 @@ from app.schemas.api import (
 from app.schemas.treaty_fields import field_catalog
 from app.services import audit as audit_service
 from app.services import extraction as extraction_service
+from app.services import stats as stats_service
 from app.services import treaties as treaty_service
 from app.services.errors import translate_llm_errors
 from app.services.llm import get_extraction_model
@@ -71,39 +69,7 @@ def get_catalog() -> dict[str, str]:
 @router.get("/stats", response_model=StatsOut)
 def get_stats(db: Session = Depends(get_db)) -> StatsOut:
     """High-level KPIs for the home dashboard."""
-    def count(stmt) -> int:
-        return db.execute(stmt).scalar_one() or 0
-
-    treaties = count(select(func.count()).select_from(Treaty))
-    awaiting_review = count(
-        select(func.count()).select_from(TreatyVersion)
-        .where(TreatyVersion.status == VersionStatus.DRAFT)
-    )
-    approved_versions = count(
-        select(func.count()).select_from(TreatyVersion)
-        .where(TreatyVersion.status == VersionStatus.APPROVED)
-    )
-    in_force = count(
-        select(func.count(func.distinct(TreatyVersion.treaty_id)))
-        .where(TreatyVersion.status == VersionStatus.APPROVED)
-    )
-    amendments = count(
-        select(func.count()).select_from(TreatyVersion)
-        .where(TreatyVersion.origin.in_(
-            [VersionOrigin.AMENDMENT_DOCUMENT, VersionOrigin.MANUAL_AMENDMENT]))
-    )
-    documents = count(select(func.count()).select_from(Document))
-    audit_entries = count(select(func.count()).select_from(AuditLog))
-
-    return StatsOut(
-        treaties=treaties,
-        in_force=in_force,
-        awaiting_review=awaiting_review,
-        amendments=amendments,
-        approved_versions=approved_versions,
-        documents=documents,
-        audit_entries=audit_entries,
-    )
+    return stats_service.compute_stats(db)
 
 
 # --------------------------------------------------------------------------
