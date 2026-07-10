@@ -6,6 +6,8 @@ the treaty context we hand it. On a treaty page the caller passes ``treaty_id``
 and we inject that treaty's data as context so answers are grounded; elsewhere
 it acts as a general reinsurance / how-to-use-the-app assistant.
 """
+import json
+
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from sqlalchemy import select
@@ -36,7 +38,13 @@ Rules:
 
 # How many treaties to list individually in the portfolio overview before we
 # stop (headline counts still cover the whole book).
-_MAX_TREATIES_LISTED = 60
+_MAX_TREATIES_LISTED = 30
+
+# Keep the chat prompt small and recent so each request stays snappy.
+_MAX_HISTORY_MESSAGES = 8
+
+# Long field values can balloon prompt size; keep them readable but compact.
+_MAX_VALUE_CHARS = 140
 
 # Appended only when a treaty context is present, so the assistant declares
 # which fields it used. We validate the labels against the treaty's real fields
@@ -85,9 +93,23 @@ def _treaty_context(db: Session, treaty_id: str) -> tuple[str, list[str]] | None
             continue
         labels.append(dp.field_label)
         loc = f" [{dp.source_location}]" if dp.source_location else ""
-        lines.append(f"- {dp.field_label}: {dp.value}{loc}")
+        lines.append(f"- {dp.field_label}: {_compact_value(dp.value)}{loc}")
     lines.append("=== END TREATY CONTEXT ===")
     return "\n".join(lines), labels
+
+
+def _compact_value(value) -> str:
+    """Render a prompt-friendly value without letting long fields explode the
+    context sent to the model."""
+    if isinstance(value, str):
+        text = value
+    elif isinstance(value, (int, float, bool)):
+        text = str(value)
+    else:
+        text = json.dumps(value, ensure_ascii=False, default=str)
+    if len(text) > _MAX_VALUE_CHARS:
+        return text[: _MAX_VALUE_CHARS - 1] + "…"
+    return text
 
 
 def _portfolio_context(db: Session) -> str:
@@ -160,7 +182,7 @@ def _extract_sources(reply: str, valid_labels: list[str]) -> tuple[str, list[str
 
 def _to_lc_messages(system: str, history: list[ChatMessage]):
     msgs = [SystemMessage(content=system)]
-    for m in history:
+    for m in history[-_MAX_HISTORY_MESSAGES:]:
         if m.role == "assistant":
             msgs.append(AIMessage(content=m.content))
         else:

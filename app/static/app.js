@@ -677,6 +677,7 @@ function initChat() {
 
   // Conversation history sent to the API: [{role, content}, ...].
   const history = [];
+  const MAX_HISTORY_MESSAGES = 8;
   let busy = false;
 
   // Inline markdown on already-escaped text: **bold**, *italic*, `code`.
@@ -767,6 +768,13 @@ function initChat() {
     input.focus();
   }
 
+  function pushHistory(message) {
+    history.push(message);
+    if (history.length > MAX_HISTORY_MESSAGES) {
+      history.splice(0, history.length - MAX_HISTORY_MESSAGES);
+    }
+  }
+
   launch.onclick = () => (panel.hidden ? openPanel() : closePanel());
   wrap.querySelector("#chat-close").onclick = closePanel;
   wrap.querySelector("#chat-new").onclick = newConversation;
@@ -794,7 +802,7 @@ function initChat() {
     input.style.height = "auto";
 
     addMessage("user", text);
-    history.push({ role: "user", content: text });
+    pushHistory({ role: "user", content: text });
     const typing = addMessage("assistant", "", { typing: true });
 
     try {
@@ -804,7 +812,7 @@ function initChat() {
       });
       typing.remove();
       addMessage("assistant", body.reply, { citations: body.citations || [] });
-      history.push({ role: "assistant", content: body.reply });
+      pushHistory({ role: "assistant", content: body.reply });
     } catch (err) {
       typing.remove();
       const el = addMessage("assistant", "Sorry — " + err.message);
