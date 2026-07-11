@@ -35,6 +35,11 @@ from app.services import stats as stats_service
 from app.services import treaties as treaty_service
 from app.services.errors import translate_llm_errors
 from app.services.llm import get_extraction_model
+from app.config import get_settings
+from app import observability
+
+import time
+
 
 router = APIRouter(tags=["treaties"])
 
@@ -88,13 +93,17 @@ def run_extraction(
     location, confidence and rationale — review it, correct any data point,
     then approve the version.
     """
+
     doc = _get_document(db, payload.document_id, "treaty")
-    with translate_llm_errors("extract the treaty"):
-        extraction = extraction_service.extract_treaty(llm, doc.content_text)
-    version = treaty_service.create_treaty_from_extraction(
-        db, doc, extraction, actor=payload.actor, reference_override=payload.treaty_reference
-    )
-    return _version_detail(version)
+
+    with observability.run(f"extract:{doc.filename}"):
+
+        with translate_llm_errors("extract the treaty"):
+            extraction = extraction_service.extract_treaty(llm, doc.content_text)
+        version = treaty_service.create_treaty_from_extraction(
+            db, doc, extraction, actor=payload.actor, reference_override=payload.treaty_reference
+        )
+        return _version_detail(version)
 
 
 # --------------------------------------------------------------------------

@@ -49,6 +49,10 @@ class Settings(BaseSettings):
     # treaties; this is a cost/safety backstop, not a functional limit.
     max_document_chars: int = 600_000
 
+    mlflow_enabled: bool = False
+    mlflow_tracking_uri: str = "http://localhost:5000"
+    mlflow_experiment: str = "treaty-extraction"
+
 
 @lru_cache
 def get_settings() -> Settings:
