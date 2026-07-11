@@ -1,5 +1,5 @@
 """Request/response models for the HTTP API."""
-from datetime import datetime
+from datetime import date, datetime
 from typing import Optional
 
 from pydantic import BaseModel, Field
@@ -53,7 +53,7 @@ class VersionSummary(BaseModel):
     source_document_id: Optional[str] = None
     parent_version_id: Optional[str] = None
     change_summary: Optional[str] = None
-    effective_date: Optional[str] = None
+    effective_date: Optional[date] = None
     created_by: str
     created_at: datetime
     reviewed_by: Optional[str] = None
@@ -120,7 +120,7 @@ class ManualAmendmentRequest(BaseModel):
         ..., description="Mapping of field_key -> new value. Keys must belong to the field catalog."
     )
     reason: str = Field(..., description="Business reason for the amendment (audited).")
-    effective_date: Optional[str] = None
+    effective_date: Optional[date] = None
     actor: str = "user"
 
 

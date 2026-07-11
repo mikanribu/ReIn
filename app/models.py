@@ -12,9 +12,9 @@ Design principles
   hash-chained audit log.
 """
 import uuid
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
-from sqlalchemy import JSON, Float, ForeignKey, Integer, LargeBinary, String, Text, UniqueConstraint
+from sqlalchemy import JSON, Date, Float, ForeignKey, Integer, LargeBinary, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -98,7 +98,7 @@ class TreatyVersion(Base):
     source_document_id: Mapped[str | None] = mapped_column(ForeignKey("documents.id"), nullable=True)
     parent_version_id: Mapped[str | None] = mapped_column(ForeignKey("treaty_versions.id"), nullable=True)
     change_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
-    effective_date: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    effective_date: Mapped[date | None] = mapped_column(Date, nullable=True)
 
     created_by: Mapped[str] = mapped_column(String(256), default="system")
     created_at: Mapped[datetime] = mapped_column(default=utcnow)

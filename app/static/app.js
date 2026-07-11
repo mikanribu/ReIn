@@ -103,6 +103,37 @@ function valueToInput(v) {
   return typeof v === "string" ? v : JSON.stringify(v);
 }
 
+function normText(v) {
+  return String(v ?? "").toLowerCase();
+}
+
+function formatDate(value) {
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "";
+  const dd = String(d.getDate()).padStart(2, "0");
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const yyyy = d.getFullYear();
+  return `${dd}/${mm}/${yyyy}`;
+}
+
+function formatDateTime(value) {
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "";
+  const date = formatDate(d);
+  const hh = String(d.getHours()).padStart(2, "0");
+  const min = String(d.getMinutes()).padStart(2, "0");
+  return `${date} ${hh}:${min}`;
+}
+
+function formatDateInput(value) {
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "";
+  const dd = String(d.getDate()).padStart(2, "0");
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const yyyy = d.getFullYear();
+  return `${yyyy}-${mm}-${dd}`;
+}
+
 // Editor control for a data-point value: a single-line input for short values,
 // a multi-line textarea for long ones (lists, clauses, schedules). Both carry
 // the `edit-value` class so callers read `.value` uniformly. `extraAttrs` lets
@@ -160,12 +191,24 @@ async function renderHome() {
   const rows = treaties.map((t) => {
     const latest = t.versions[t.versions.length - 1];
     const approved = [...t.versions].reverse().find((v) => v.status === "approved");
-    return `<tr class="clickable" onclick="location.hash='#/treaty/${t.id}'">
+    const rowFlags = {
+      in_force: !!approved,
+      needs_review: !!(latest && latest.status === "draft"),
+      no_versions: !latest,
+    };
+    const rowSearch = normText([
+      t.reference,
+      t.name,
+      latest ? latest.status : "",
+      approved ? `approved v${approved.version_number}` : "",
+      latest ? `latest v${latest.version_number}` : "",
+    ].join(" "));
+    return `<tr class="clickable" data-search="${esc(rowSearch)}" data-create-date="${formatDateInput(t.created_at)}" data-in-force="${rowFlags.in_force ? "1" : "0"}" data-needs-review="${rowFlags.needs_review ? "1" : "0"}" data-no-versions="${rowFlags.no_versions ? "1" : "0"}" onclick="location.hash='#/treaty/${t.id}'">
       <td class="mono">${esc(t.reference)}</td>
       <td>${esc(t.name)}</td>
       <td>v${latest ? latest.version_number : "-"} ${latest ? chip(latest.status) : ""}</td>
       <td>${approved ? "v" + approved.version_number : '<span class="muted">none</span>'}</td>
-      <td class="small muted">${new Date(t.created_at).toLocaleDateString()}</td>
+      <td class="small muted">${formatDate(t.created_at)}</td>
     </tr>`;
   }).join("");
 
@@ -196,11 +239,61 @@ async function renderHome() {
     </div>
     <div class="panel">
       <h2>Treaties</h2>
+      ${treaties.length ? `
+        <div class="filters">
+          <label>
+            <span>Search</span>
+            <input type="search" id="portfolio-search" placeholder="Reference, treaty name, status…" />
+          </label>
+          <label>
+            <span>Create Date</span>
+            <input type="date" id="filter-date" />
+          </label>
+          <div class="filter-checks">
+            <label class="inline"><input type="checkbox" id="filter-in-force" /> In force</label>
+            <label class="inline"><input type="checkbox" id="filter-needs-review" /> Needs review</label>
+            <label class="inline"><input type="checkbox" id="filter-no-versions" /> No versions</label>
+          </div>
+        </div>
+      ` : ""}
       ${treaties.length === 0
         ? '<p class="muted">No treaties yet — upload a document above to get started.</p>'
         : `<table><thead><tr><th>Reference</th><th>Name</th><th>Latest version</th><th>In force</th><th>Created</th></tr></thead>
-           <tbody>${rows}</tbody></table>`}
+           <tbody id="portfolio-body">${rows}</tbody></table>`}
     </div>`;
+
+  const portfolioSearch = document.getElementById("portfolio-search");
+  const filterInForce = document.getElementById("filter-in-force");
+  const filterNeedsReview = document.getElementById("filter-needs-review");
+  const filterNoVersions = document.getElementById("filter-no-versions");
+  const filterDate = document.getElementById("filter-date");
+  const portfolioRows = [...document.querySelectorAll("#portfolio-body tr")];
+  const portfolioDatasetKeys = {
+    in_force: "inForce",
+    needs_review: "needsReview",
+    no_versions: "noVersions",
+  };
+  function applyPortfolioFilters() {
+    if (!portfolioRows.length) return;
+    const q = normText(portfolioSearch?.value || "");
+    const dateFilter = filterDate?.value || "";
+    const activeFlags = [];
+    if (filterInForce?.checked) activeFlags.push("in_force");
+    if (filterNeedsReview?.checked) activeFlags.push("needs_review");
+    if (filterNoVersions?.checked) activeFlags.push("no_versions");
+    portfolioRows.forEach((tr) => {
+      const matchesText = !q || tr.dataset.search.includes(q);
+      const matchesFlags = !activeFlags.length
+        || activeFlags.some((flag) => tr.dataset[portfolioDatasetKeys[flag]] === "1");
+      const matchesDate = !dateFilter || tr.dataset.createDate === dateFilter;
+      tr.style.display = matchesText && matchesFlags && matchesDate ? "" : "none";
+    });
+  }
+  [portfolioSearch, filterInForce, filterNeedsReview, filterNoVersions, filterDate].forEach((el) => {
+    if (!el) return;
+    el.addEventListener(el.type === "search" ? "input" : "change", applyPortfolioFilters);
+  });
+  applyPortfolioFilters();
 
   document.getElementById("btn-extract").onclick = async () => {
     const fileEl = document.getElementById("treaty-file");
@@ -253,7 +346,7 @@ async function renderTreaty(treatyId, tab = "versions") {
       <td>${esc(v.origin.replace(/_/g, " "))}</td>
       <td>${esc(v.change_summary || "—")}</td>
       <td>${esc(v.effective_date || "—")}</td>
-      <td class="small muted">${esc(v.created_by)} · ${new Date(v.created_at).toLocaleString()}</td>
+      <td class="small muted">${esc(v.created_by)} · ${formatDateTime(v.created_at)}</td>
     </tr>`).join("");
 
   view.innerHTML = `
@@ -324,7 +417,7 @@ async function renderTreaty(treatyId, tab = "versions") {
         api(`/treaties/${treatyId}/audit`), api("/audit/verify"),
       ]);
       const rows = entries.map((e) => `<tr>
-        <td class="small muted">${new Date(e.timestamp).toLocaleString()}</td>
+        <td class="small muted">${formatDateTime(e.timestamp)}</td>
         <td>${esc(e.actor)}</td>
         <td class="mono">${esc(e.action)}</td>
         <td class="small">${e.details ? esc(JSON.stringify(e.details)).slice(0, 160) : ""}</td>
@@ -394,11 +487,21 @@ async function renderVersion(treatyId, versionNumber) {
   function pointRow(p) {
     const editable = isDraft;
     const changed = changedKeys.has(p.field_key) && diff.from_version !== null;
+    const rowSearch = normText([
+      p.field_label,
+      p.field_key,
+      p.status,
+      p.value,
+      p.source_quote,
+      p.source_location,
+      p.rationale,
+      changed ? "changed" : "",
+    ].join(" "));
     const valueCell = changed
       ? `<span class="diff-old">${esc(valueToInput(oldValues[p.field_key]) || "—")}</span>
          <span class="diff-new">${esc(valueToInput(p.value) || "—")}</span>`
       : fmtValue(p.value);
-    return `<tr data-key="${esc(p.field_key)}" class="${p.value === null ? "notfound" : "found"}">
+    return `<tr data-key="${esc(p.field_key)}" data-search="${esc(rowSearch)}" data-status="${esc(p.status)}" data-found="${p.value === null ? "0" : "1"}" data-changed="${changed ? "1" : "0"}" class="${p.value === null ? "notfound" : "found"}">
       <td style="min-width:170px"><b>${esc(p.field_label)}</b><br /><span class="mono muted small">${esc(p.field_key)}</span></td>
       <td style="min-width:220px">
         <div class="val-display">${valueCell}</div>
@@ -436,8 +539,8 @@ async function renderVersion(treatyId, versionNumber) {
         <dt>Origin</dt><dd>${esc(v.origin.replace(/_/g, " "))}</dd>
         ${v.change_summary ? `<dt>Change summary</dt><dd>${esc(v.change_summary)}</dd>` : ""}
         ${v.effective_date ? `<dt>Effective date</dt><dd>${esc(v.effective_date)}</dd>` : ""}
-        <dt>Created</dt><dd>${esc(v.created_by)} · ${new Date(v.created_at).toLocaleString()}</dd>
-        ${v.reviewed_by ? `<dt>Reviewed</dt><dd>${esc(v.reviewed_by)} · ${new Date(v.reviewed_at).toLocaleString()}${v.review_note ? " — " + esc(v.review_note) : ""}</dd>` : ""}
+        <dt>Created</dt><dd>${esc(v.created_by)} · ${formatDateTime(v.created_at)}</dd>
+        ${v.reviewed_by ? `<dt>Reviewed</dt><dd>${esc(v.reviewed_by)} · ${formatDateTime(v.reviewed_at)}${v.review_note ? " — " + esc(v.review_note) : ""}</dd>` : ""}
       </dl>
     </div>
     ${v.source_document_id ? `<div class="panel">
@@ -458,6 +561,24 @@ async function renderVersion(treatyId, versionNumber) {
         <h2 style="margin:0">Data points</h2>
         <label class="small muted"><input type="checkbox" id="hide-empty" checked /> hide fields not in document</label>
       </div>
+      <div class="filters" style="margin-top:10px">
+        <label>
+          <span>Search</span>
+          <input type="search" id="dp-search" placeholder="Field, key, value, source…" />
+        </label>
+        <label>
+          <span>Status</span>
+          <select id="dp-status">
+            <option value="all">All</option>
+            <option value="extracted">Extracted</option>
+            <option value="edited">Edited</option>
+            <option value="amended_by_document">Amended by document</option>
+            <option value="carried_forward">Carried forward</option>
+            <option value="not_found">Not in document</option>
+            <option value="changed">Changed vs prior</option>
+          </select>
+        </label>
+      </div>
       <table style="margin-top:10px">
         <thead><tr><th>Field</th><th>Value</th><th>Status</th><th>Confidence</th><th>Source / rationale</th><th></th></tr></thead>
         <tbody id="dp-body">${v.data_points.map(pointRow).join("")}</tbody>
@@ -466,12 +587,27 @@ async function renderVersion(treatyId, versionNumber) {
 
   // Hide-empty toggle
   const hideEmpty = document.getElementById("hide-empty");
+  const dpSearch = document.getElementById("dp-search");
+  const dpStatus = document.getElementById("dp-status");
+  const rows = [...document.querySelectorAll("#dp-body tr")];
   function applyFilter() {
-    document.querySelectorAll("#dp-body tr.notfound").forEach((tr) => {
-      tr.style.display = hideEmpty.checked && !tr.querySelector(".editbox:not([hidden])") ? "none" : "";
+    if (!rows.length) return;
+    const q = normText(dpSearch?.value || "");
+    const status = dpStatus?.value || "all";
+    rows.forEach((tr) => {
+      const editing = !!tr.querySelector(".editbox:not([hidden])");
+      const matchesText = !q || tr.dataset.search.includes(q);
+      const matchesStatus =
+        status === "all" ||
+        tr.dataset.status === status ||
+        (status === "changed" && tr.dataset.changed === "1");
+      const hiddenByEmpty = hideEmpty.checked && tr.dataset.found === "0" && !editing;
+      tr.style.display = matchesText && matchesStatus && !hiddenByEmpty ? "" : "none";
     });
   }
   hideEmpty.onchange = applyFilter;
+  if (dpSearch) dpSearch.addEventListener("input", applyFilter);
+  if (dpStatus) dpStatus.addEventListener("change", applyFilter);
   applyFilter();
 
   // Source-document viewer (lazy-loads the file on first Show)

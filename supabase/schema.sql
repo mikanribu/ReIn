@@ -36,7 +36,7 @@ create table if not exists treaty_versions (
     source_document_id varchar(36) references documents (id),
     parent_version_id  varchar(36) references treaty_versions (id),
     change_summary     text,
-    effective_date     varchar(64),
+    effective_date     date,
     created_by         varchar(256) not null default 'system',
     created_at         timestamptz  not null default now(),
     reviewed_by        varchar(256),

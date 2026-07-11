@@ -10,6 +10,7 @@ the value but also the exact source quote, its location in the document, a
 confidence score and a short rationale — this is what makes the extraction
 transparent and reviewable.
 """
+from datetime import date
 from typing import Optional, Union
 
 from pydantic import BaseModel, Field
@@ -213,7 +214,7 @@ class AmendmentExtraction(BaseModel):
     mapped against the defined data-point catalog."""
 
     summary: str = Field(..., description="One-paragraph summary of what the amendment changes.")
-    effective_date: Optional[str] = Field(
+    effective_date: Optional[date] = Field(
         None, description="Date the amendment takes effect (ISO date), if stated."
     )
     changes: list[AmendedField] = Field(

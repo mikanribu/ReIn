@@ -10,6 +10,7 @@ start from the latest approved version and create a *new* draft, so the
 approved history is never mutated.
 """
 import uuid
+from datetime import date
 
 from fastapi import HTTPException
 from sqlalchemy import select
@@ -75,6 +76,10 @@ def _next_version_number(db: Session, treaty_id: str) -> int:
 
 def values_dict(version: TreatyVersion) -> dict:
     return {dp.field_key: dp.value for dp in version.data_points}
+
+
+def _date_text(value: date | None) -> str | None:
+    return value.isoformat() if value is not None else None
 
 
 # --------------------------------------------------------------------------
@@ -337,7 +342,7 @@ def create_amendment_from_document(
             "new_version": version.version_number,
             "changed_fields": applied,
             "summary": amendment.summary,
-            "effective_date": amendment.effective_date,
+            "effective_date": _date_text(amendment.effective_date),
         },
     )
     db.commit()
@@ -350,7 +355,7 @@ def create_manual_amendment(
     treaty: Treaty,
     changes: dict,
     reason: str,
-    effective_date: str | None,
+    effective_date: date | None,
     actor: str,
 ) -> TreatyVersion:
     unknown = sorted(set(changes) - FIELD_KEYS)
@@ -397,7 +402,7 @@ def create_manual_amendment(
             "new_version": version.version_number,
             "changes": {k: {"old": old_values[k], "new": v} for k, v in changes.items()},
             "reason": reason,
-            "effective_date": effective_date,
+            "effective_date": _date_text(effective_date),
         },
     )
     db.commit()

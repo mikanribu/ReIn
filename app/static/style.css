@@ -204,7 +204,37 @@ tr.clickable:hover { background: var(--accent-soft); }
   border-radius: 0; padding: 8px 14px; font-weight: 600;
 }
 .tabs button.active { color: var(--accent); border-bottom-color: var(--accent); }
-.filters { margin: 6px 0 10px; display: flex; gap: 14px; font-size: 13px; color: var(--muted); }
+.filters {
+  margin: 6px 0 10px;
+  display: flex;
+  gap: 14px;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  font-size: 13px;
+  color: var(--muted);
+}
+.filters label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 220px;
+}
+.filters label.inline {
+  min-width: 0;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  padding-bottom: 6px;
+}
+.filters .filter-checks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.filters input[type="search"], .filters select {
+  width: 100%;
+  max-width: 340px;
+}
 
 /* ---------------------------------------------------------------------------
    Chat assistant (floating pop-up)
