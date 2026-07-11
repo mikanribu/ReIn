@@ -2,6 +2,7 @@
 
 from contextlib import contextmanager
 import logging
+import mlflow.langchain
 
 from app.config import get_settings
 
@@ -32,6 +33,7 @@ def run(name: str):
     if not settings.mlflow_enabled:
         yield
         return
+    init_mlflow() 
     import mlflow
     with mlflow.start_run(run_name=name) as run:
         print(f"MLflow run started: {run.info.run_id}")

@@ -7,3 +7,5 @@ __pycache__/
 venv/
 push.log
 mlruns/
+mlflow.db
+mlartifacts/ # where SQLite-backend runs store artifacts

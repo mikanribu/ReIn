@@ -50,7 +50,8 @@ class Settings(BaseSettings):
     max_document_chars: int = 600_000
 
     mlflow_enabled: bool = False
-    mlflow_tracking_uri: str = "http://localhost:5000"
+    # app/config.py
+    mlflow_tracking_uri: str = "sqlite:///mlflow.db"
     mlflow_experiment: str = "treaty-extraction"
 
 
