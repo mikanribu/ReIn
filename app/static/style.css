@@ -70,6 +70,13 @@ main { max-width: 1200px; margin: 24px auto; padding: 0 24px; }
 .panel h2 { margin: 0 0 12px; font-size: 15px; }
 .panel h3 { margin: 18px 0 8px; font-size: 13.5px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
 
+.upload-tiles {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 14px; margin-bottom: 18px;
+}
+.upload-tile { margin-bottom: 0; }
+.upload-tile h2 { display: flex; align-items: center; gap: 8px; }
+
 .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
 .muted { color: var(--muted); }
 .small { font-size: 12.5px; }

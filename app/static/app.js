@@ -222,19 +222,34 @@ async function renderHome() {
 
   view.innerHTML = `
     ${kpis}
-    <div class="panel">
-      <h2>New treaty from document</h2>
-      <p class="muted small">Upload a treaty wording (PDF, DOCX or TXT). The parser extracts every
-      defined data point with its source quote and confidence, and creates a <b>draft</b> for your review —
-      nothing is used downstream until you approve it.</p>
-      <div class="row">
-        <label class="file-input">
-          <input type="file" id="treaty-file" accept=".pdf,.docx,.txt,.md" />
-          <span class="file-btn">Choose file</span>
-          <span class="file-name">No file chosen</span>
-        </label>
-        <button id="btn-extract">Upload &amp; extract</button>
-        <span class="muted small" id="extract-status"></span>
+    <div class="upload-tiles">
+      <div class="panel upload-tile">
+        <h2>Single treaty upload</h2>
+        <p class="muted small">Upload a treaty wording (PDF, DOCX or TXT). The parser extracts every
+        defined data point with its source quote and confidence, and creates a <b>draft</b> for your review —
+        nothing is used downstream until you approve it.</p>
+        <div class="row">
+          <label class="file-input">
+            <input type="file" id="treaty-file" accept=".pdf,.docx,.txt,.md" />
+            <span class="file-btn">Choose file</span>
+            <span class="file-name">No file chosen</span>
+          </label>
+          <button id="btn-extract">Upload &amp; extract</button>
+          <span class="muted small" id="extract-status"></span>
+        </div>
+      </div>
+      <div class="panel upload-tile">
+        <h2>Multiple treaties upload <span class="chip superseded">coming soon</span></h2>
+        <p class="muted small">Upload several treaty wordings at once and extract them in a batch.
+        Each document will still create its own draft for individual review.</p>
+        <div class="row">
+          <label class="file-input disabled">
+            <input type="file" id="treaty-files-multi" accept=".pdf,.docx,.txt,.md" multiple disabled />
+            <span class="file-btn">Choose files</span>
+            <span class="file-name">No files chosen</span>
+          </label>
+          <button id="btn-extract-multi" disabled>Upload &amp; extract</button>
+        </div>
       </div>
     </div>
     <div class="panel">
@@ -756,7 +771,10 @@ document.addEventListener("change", (e) => {
   const inp = e.target;
   if (inp && inp.matches && inp.matches('.file-input input[type="file"]')) {
     const nameEl = inp.parentElement.querySelector(".file-name");
-    if (nameEl) nameEl.textContent = inp.files.length ? inp.files[0].name : "No file chosen";
+    if (!nameEl) return;
+    if (!inp.files.length) nameEl.textContent = inp.multiple ? "No files chosen" : "No file chosen";
+    else if (inp.multiple && inp.files.length > 1) nameEl.textContent = `${inp.files.length} files chosen`;
+    else nameEl.textContent = inp.files[0].name;
   }
 });
 
