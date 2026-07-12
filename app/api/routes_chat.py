@@ -8,6 +8,7 @@ from app.schemas.api import ChatRequest, ChatResponse
 from app.services import chat as chat_service
 from app.services.errors import translate_llm_errors
 from app.services.llm import get_chat_model
+from app import observability
 
 router = APIRouter(tags=["chat"])
 
@@ -22,10 +23,12 @@ def chat(
     treaty's data. The model has no tools, so it cannot access the web."""
     if not payload.messages:
         raise HTTPException(422, "messages must not be empty")
-    with translate_llm_errors("answer the question"):
-        reply, grounded, citations = chat_service.answer(
-            llm, db, payload.messages, payload.treaty_id
+    
+    with observability.run(name="chat"):
+        with translate_llm_errors("answer the question"):
+            reply, grounded, citations = chat_service.answer(
+                llm, db, payload.messages, payload.treaty_id
+            )
+        return ChatResponse(
+            reply=reply, grounded_in_treaty=grounded, citations=citations
         )
-    return ChatResponse(
-        reply=reply, grounded_in_treaty=grounded, citations=citations
-    )
