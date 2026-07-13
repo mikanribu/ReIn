@@ -166,16 +166,30 @@ async function route() {
   } catch (err) {
     view.innerHTML = `<div class="banner error">${esc(err.message)}</div>`;
   }
+  wrapTables();
   window.scrollTo(0, 0);
 }
 window.addEventListener("hashchange", route);
+
+// Wrap any rendered table in a horizontally scrollable container so wide
+// tables never break the page layout (e.g. on a projector at a demo).
+function wrapTables() {
+  view.querySelectorAll("table:not([data-wrapped])").forEach((table) => {
+    table.setAttribute("data-wrapped", "1");
+    const wrap = document.createElement("div");
+    wrap.className = "table-wrap";
+    table.parentNode.insertBefore(wrap, table);
+    wrap.appendChild(table);
+  });
+}
 
 // ---------------------------------------------------------------------------
 // Home: treaty list + upload & extract
 // ---------------------------------------------------------------------------
 
-function kpiTile(value, label, { sub = "", cls = "" } = {}) {
+function kpiTile(value, label, { sub = "", cls = "", icon = "" } = {}) {
   return `<div class="kpi ${cls}">
+    ${icon ? `<span class="kpi-icon" aria-hidden="true">${icon}</span>` : ""}
     <span class="kpi-value">${value}</span>
     <span class="kpi-label">${esc(label)}</span>
     ${sub ? `<span class="kpi-sub">${esc(sub)}</span>` : ""}
@@ -213,11 +227,11 @@ async function renderHome() {
   }).join("");
 
   const kpis = stats ? `<div class="kpis">
-    ${kpiTile(stats.treaties, "Treaties", { cls: "accent" })}
-    ${kpiTile(stats.in_force, "In force", { sub: `${stats.approved_versions} approved version${stats.approved_versions === 1 ? "" : "s"}`, cls: "ok" })}
-    ${kpiTile(stats.awaiting_review, "Awaiting review", { sub: "draft versions", cls: stats.awaiting_review ? "warn" : "" })}
-    ${kpiTile(stats.amendments, "Amendments")}
-    ${kpiTile(stats.documents, "Documents")}
+    ${kpiTile(stats.treaties, "Treaties", { cls: "accent", icon: "📄" })}
+    ${kpiTile(stats.in_force, "In force", { sub: `${stats.approved_versions} approved version${stats.approved_versions === 1 ? "" : "s"}`, cls: "ok", icon: "✅" })}
+    ${kpiTile(stats.awaiting_review, "Awaiting review", { sub: "draft versions", cls: stats.awaiting_review ? "warn" : "", icon: "⏳" })}
+    ${kpiTile(stats.amendments, "Amendments", { icon: "✏️" })}
+    ${kpiTile(stats.documents, "Documents", { icon: "🗂️" })}
   </div>` : "";
 
   view.innerHTML = `
@@ -246,6 +260,7 @@ async function renderHome() {
             <span class="file-name">No file chosen</span>
           </label>
           <button id="btn-extract">Upload &amp; extract</button>
+          <button class="ghost" id="btn-sample" title="Extract a bundled sample treaty">Try a sample</button>
           <span class="muted small" id="extract-status"></span>
         </div>
       </div>
@@ -289,7 +304,13 @@ async function renderHome() {
         </div>
       ` : ""}
       ${treaties.length === 0
-        ? '<p class="muted">No treaties yet — upload a document above to get started.</p>'
+        ? `<div class="empty-state">
+             <div class="empty-icon" aria-hidden="true">📄🔍</div>
+             <h3>No treaties yet</h3>
+             <p class="muted">Upload a treaty document above — or extract a bundled sample to see the full
+             workflow in action.</p>
+             <button id="btn-sample-empty">Try a sample treaty</button>
+           </div>`
         : `<table><thead><tr><th>Reference</th><th>Name</th><th>Latest version</th><th>In force</th><th>Created</th></tr></thead>
            <tbody id="portfolio-body">${rows}</tbody></table>`}
     </div>`;
@@ -327,14 +348,12 @@ async function renderHome() {
   });
   applyPortfolioFilters();
 
-  document.getElementById("btn-extract").onclick = async () => {
-    const fileEl = document.getElementById("treaty-file");
-    const status = document.getElementById("extract-status");
-    if (!fileEl.files.length) return toast("Choose a file first", true);
-    const btn = document.getElementById("btn-extract");
-    btn.disabled = true;
-    const loader = startLoader(status, [
-      `Uploading “${fileEl.files[0].name}”…`,
+  // Extract a document into a new treaty draft, driving the shared loader.
+  // `getDoc` returns the created document (from an upload or the sample loader).
+  async function extractInto(statusEl, disableEls, getDoc) {
+    disableEls.forEach((el) => el && (el.disabled = true));
+    const loader = startLoader(statusEl, [
+      "Uploading the document…",
       "Reading and parsing the document…",
       "Sending the document to the model…",
       "Extracting data points…",
@@ -343,11 +362,7 @@ async function renderHome() {
       "Almost there — finalizing the draft…",
     ]);
     try {
-      const fd = new FormData();
-      fd.append("file", fileEl.files[0]);
-      fd.append("kind", "treaty");
-      fd.append("actor", actor());
-      const doc = await api("/documents", { method: "POST", body: fd });
+      const doc = await getDoc();
       loader.setMessage("Extracting data points…");
       await post("/extractions", { document_id: doc.id, actor: actor() });
       const treaties2 = await api("/treaties");
@@ -358,9 +373,38 @@ async function renderHome() {
     } catch (err) {
       loader.stop();
       toast(err.message, true);
-      btn.disabled = false;
+      disableEls.forEach((el) => el && (el.disabled = false));
     }
+  }
+
+  const btnExtract = document.getElementById("btn-extract");
+  const btnSample = document.getElementById("btn-sample");
+  const status = document.getElementById("extract-status");
+
+  btnExtract.onclick = () => {
+    const fileEl = document.getElementById("treaty-file");
+    if (!fileEl.files.length) return toast("Choose a file first", true);
+    extractInto(status, [btnExtract, btnSample], async () => {
+      const fd = new FormData();
+      fd.append("file", fileEl.files[0]);
+      fd.append("kind", "treaty");
+      fd.append("actor", actor());
+      return api("/documents", { method: "POST", body: fd });
+    });
   };
+
+  // "Try a sample": load the bundled sample treaty server-side, then extract.
+  function loadSample(statusEl, disableEls) {
+    extractInto(statusEl, disableEls, async () => {
+      const fd = new FormData();
+      fd.append("kind", "treaty");
+      fd.append("actor", actor());
+      return api("/documents/sample", { method: "POST", body: fd });
+    });
+  }
+  if (btnSample) btnSample.onclick = () => loadSample(status, [btnExtract, btnSample]);
+  const btnSampleEmpty = document.getElementById("btn-sample-empty");
+  if (btnSampleEmpty) btnSampleEmpty.onclick = () => loadSample(status, [btnSampleEmpty]);
 }
 
 // ---------------------------------------------------------------------------
