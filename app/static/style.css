@@ -9,7 +9,7 @@
   --accent-soft: #e8f0ff;
   --ok: #1a7f37;
   --ok-soft: #e6f4ea;
-  --warn: #9a6700;
+  --warn: #f49f0c;
   --warn-soft: #fff8e1;
   --bad: #c62828;
   --bad-soft: #fdecea;
@@ -41,6 +41,12 @@ header .actor input {
   border-radius: 6px; padding: 4px 8px; width: 140px;
 }
 main { max-width: 1200px; margin: 24px auto; padding: 0 24px; }
+
+/* Section headers separating dashboard blocks */
+.section-header { margin: 32px 0 12px; padding-top: 20px; border-top: 1px solid var(--border); }
+.section-header:first-child { margin-top: 0; padding-top: 0; border-top: 0; }
+.section-header h2 { margin: 0 0 4px; font-size: 17px; }
+.section-header p { margin: 0; }
 
 /* Dashboard KPI tiles */
 .kpis {

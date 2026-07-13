@@ -221,11 +221,22 @@ async function renderHome() {
   </div>` : "";
 
   view.innerHTML = `
+    <div class="section-header">
+      <h2>Treaties Overview</h2>
+      <p class="muted small">Key metrics for your treaty portfolio — how many treaties are tracked, how many
+      are currently in force, how many draft versions are awaiting review, plus the total amendments and
+      source documents on file.</p>
+    </div>
     ${kpis}
+    <div class="section-header">
+      <h2>Upload Treaties</h2>
+      <p class="muted small">Add new treaty file(s) for automatic extraction. Each upload creates a
+      <b>draft</b> version for you to review — nothing is used downstream until it's approved.</p>
+    </div>
     <div class="upload-tiles">
       <div class="panel upload-tile">
         <h2>Single treaty upload</h2>
-        <p class="muted small">Upload a treaty wording (PDF, DOCX or TXT). The parser extracts every
+        <p class="muted small">Upload a treaty file (PDF, DOCX or TXT). The parser extracts every
         defined data point with its source quote and confidence, and creates a <b>draft</b> for your review —
         nothing is used downstream until you approve it.</p>
         <div class="row">
@@ -240,8 +251,10 @@ async function renderHome() {
       </div>
       <div class="panel upload-tile">
         <h2>Multiple treaties upload <span class="chip superseded">coming soon</span></h2>
-        <p class="muted small">Upload several treaty wordings at once and extract them in a batch.
-        Each document will still create its own draft for individual review.</p>
+        <p class="muted small">Upload several treaty files at once and extract them in a batch.
+        Each document will still create its own draft for individual review.
+        Support upload of treaties and amendments in one go, with automatic mapping of amendments to the correct treaty.
+        </p>
         <div class="row">
           <label class="file-input disabled">
             <input type="file" id="treaty-files-multi" accept=".pdf,.docx,.txt,.md" multiple disabled />
@@ -252,8 +265,12 @@ async function renderHome() {
         </div>
       </div>
     </div>
-    <div class="panel">
+    <div class="section-header">
       <h2>Treaties</h2>
+      <p class="muted small">All treaties uploaded so far, with their latest version, in-force version and
+      creation date. Search or filter to find a specific treaty.</p>
+    </div>
+    <div class="panel">
       ${treaties.length ? `
         <div class="filters">
           <label>
