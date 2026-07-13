@@ -180,9 +180,26 @@ def _extract_sources(reply: str, valid_labels: list[str]) -> tuple[str, list[str
     return reply, []
 
 
+# A single message can also balloon the prompt (e.g. a pasted-in wall of
+# text), so cap each one's length in addition to the turn count above.
+_MAX_MESSAGE_CHARS = 8000
+
+
+def _trim_history(history: list[ChatMessage]) -> list[ChatMessage]:
+    """Keep only the most recent turns, and length-limit each message, so a
+    long or pasted-in conversation can't blow up token cost/latency."""
+    out: list[ChatMessage] = []
+    for m in history[-_MAX_HISTORY_MESSAGES:]:
+        content = m.content
+        if len(content) > _MAX_MESSAGE_CHARS:
+            content = content[:_MAX_MESSAGE_CHARS] + "… [truncated]"
+        out.append(ChatMessage(role=m.role, content=content))
+    return out
+
+
 def _to_lc_messages(system: str, history: list[ChatMessage]):
     msgs = [SystemMessage(content=system)]
-    for m in history[-_MAX_HISTORY_MESSAGES:]:
+    for m in history:
         if m.role == "assistant":
             msgs.append(AIMessage(content=m.content))
         else:
@@ -211,7 +228,7 @@ def answer(
         system = f"{GENERAL_SYSTEM}\n\n{_portfolio_context(db)}"
 
     # No tools are bound → the model cannot browse the web or take actions.
-    response = llm.invoke(_to_lc_messages(system, history))
+    response = llm.invoke(_to_lc_messages(system, _trim_history(history)))
     content = response.content if hasattr(response, "content") else str(response)
     if isinstance(content, list):  # some providers return content parts
         content = "".join(part.get("text", "") if isinstance(part, dict) else str(part)

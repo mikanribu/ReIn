@@ -1,16 +1,22 @@
 """Document upload and retrieval."""
 import mimetypes
+from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
+from app.config import get_settings
 from app.database import get_db
 from app.models import Document
 from app.schemas.api import DocumentOut
 from app.services import audit, documents
 
 router = APIRouter(prefix="/documents", tags=["documents"])
+
+# Bundled sample documents, so a demo can be run without hunting for a file.
+SAMPLES_DIR = Path(__file__).resolve().parents[2] / "samples"
+_SAMPLE_FILES = {"treaty": "sample_treaty.txt", "amendment": "sample_amendment.txt"}
 
 
 def _guess_content_type(filename: str, provided: str | None) -> str:
@@ -44,14 +50,26 @@ async def upload_document(
     data = await file.read()
     if not data:
         raise HTTPException(422, "Uploaded file is empty")
+    limit = get_settings().max_upload_bytes
+    if len(data) > limit:
+        raise HTTPException(
+            413,
+            f"File is too large ({len(data) // (1024 * 1024)} MB). "
+            f"The maximum is {limit // (1024 * 1024)} MB.",
+        )
     filename = file.filename or "upload.txt"
+    content_type = _guess_content_type(filename, file.content_type)
+    return _store_document(db, filename, data, kind, content_type, actor)
+
+
+def _store_document(db, filename, data, kind, content_type, actor) -> DocumentOut:
     text = documents.extract_text(filename, data)
     doc = Document(
         filename=filename,
         kind=kind,
         content_text=text,
         content_bytes=data,
-        content_type=_guess_content_type(filename, file.content_type),
+        content_type=content_type,
         sha256=documents.sha256_hex(data),
         uploaded_by=actor,
     )
@@ -67,6 +85,23 @@ async def upload_document(
     )
     db.commit()
     return _to_out(doc)
+
+
+@router.post("/sample", response_model=DocumentOut, status_code=201)
+def load_sample_document(
+    kind: str = Form("treaty", description="'treaty' or 'amendment'"),
+    actor: str = Form("user"),
+    db: Session = Depends(get_db),
+) -> DocumentOut:
+    """Load a bundled sample document, so a demo can run without a file upload."""
+    name = _SAMPLE_FILES.get(kind)
+    if name is None:
+        raise HTTPException(422, "kind must be 'treaty' or 'amendment'")
+    path = SAMPLES_DIR / name
+    if not path.exists():
+        raise HTTPException(404, f"Sample '{name}' is not available on the server.")
+    data = path.read_bytes()
+    return _store_document(db, name, data, kind, "text/plain", actor)
 
 
 @router.get("/{document_id}", response_model=DocumentOut)

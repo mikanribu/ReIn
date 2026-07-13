@@ -49,8 +49,11 @@ class Settings(BaseSettings):
     # treaties; this is a cost/safety backstop, not a functional limit.
     max_document_chars: int = 600_000
 
+    # Reject uploads larger than this many bytes (guards memory + DB bloat).
+    max_upload_bytes: int = 25 * 1024 * 1024  # 25 MB
+
+    # --- Observability (MLflow) -------------------------------------------
     mlflow_enabled: bool = False
-    # app/config.py
     mlflow_tracking_uri: str = "sqlite:///mlflow.db"
     mlflow_experiment: str = "treaty-extraction"
 

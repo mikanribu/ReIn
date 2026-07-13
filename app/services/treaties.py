@@ -381,7 +381,13 @@ def create_manual_amendment(
     copies = _copy_data_points(base, version, db)
     old_values = {}
     for key, new_value in changes.items():
-        dp = copies[key]
+        dp = copies.get(key)
+        if dp is None:
+            # The base version predates this catalog field; add it fresh so the
+            # amendment can still set it (rather than KeyError-ing out).
+            dp = DataPoint(version_id=version.id, field_key=key, field_label=field_label(key))
+            db.add(dp)
+            copies[key] = dp
         old_values[key] = dp.value
         dp.value = new_value
         dp.status = DataPointStatus.AMENDED_MANUALLY

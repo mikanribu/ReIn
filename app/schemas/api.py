@@ -1,6 +1,6 @@
 """Request/response models for the HTTP API."""
 from datetime import date, datetime
-from typing import Optional
+from typing import Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -163,7 +163,7 @@ class CurrentValuesOut(BaseModel):
 # --- Chat assistant -----------------------------------------------------------
 
 class ChatMessage(BaseModel):
-    role: str = Field(..., description="'user' or 'assistant'.")
+    role: Literal["user", "assistant"] = Field(..., description="'user' or 'assistant'.")
     content: str
 
 
