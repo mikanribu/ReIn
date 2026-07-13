@@ -429,7 +429,7 @@ tr.clickable { transition: background .12s ease; }
    Knowledge Base: analytics charts + bulk ingest progress
    --------------------------------------------------------------------------- */
 .kb-charts {
-  display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 18px;
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 18px; margin-bottom: 18px; 
 }
 .kb-charts .panel { margin-bottom: 0; }
 
