@@ -44,6 +44,16 @@ class Settings(BaseSettings):
     azure_openai_deployment: str | None = None        # your deployment name
     azure_openai_api_version: str = "2024-10-21"
 
+    # --- Embeddings (Knowledge Base semantic search) ----------------------
+    # Defaults to local Ollama (nothing leaves the box). Switch to azure_openai
+    # to use a hosted text-embedding-3 deployment. Dimensions are locked to the
+    # model the corpus was indexed with — changing model means reindexing.
+    embeddings_provider: Literal["ollama", "azure_openai"] = "ollama"
+    ollama_embed_model: str = "nomic-embed-text"
+    azure_openai_embed_deployment: str | None = None  # your embeddings deployment name
+    # How many treaty chunks to retrieve as context per question.
+    rag_top_k: int = 6
+
     # Documents larger than this (characters) are truncated before being
     # sent to the LLM. Claude's 1M-token context comfortably covers full
     # treaties; this is a cost/safety backstop, not a functional limit.

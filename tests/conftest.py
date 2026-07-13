@@ -157,6 +157,29 @@ class FakeChatModel:
         return FakeAIMessage(reply)
 
 
+class FakeEmbeddings:
+    """Deterministic bag-of-words hashing embedder — no server needed. Texts
+    that share words get similar vectors, so retrieval ordering is meaningful."""
+
+    model_id = "fake:test"
+    DIM = 128
+
+    def _vec(self, text: str) -> list[float]:
+        import hashlib
+        import re
+        v = [0.0] * self.DIM
+        for tok in re.findall(r"[a-z0-9]+", text.lower()):
+            idx = int(hashlib.md5(tok.encode()).hexdigest(), 16) % self.DIM
+            v[idx] += 1.0
+        return v
+
+    def embed_documents(self, texts: list[str]) -> list[list[float]]:
+        return [self._vec(t) for t in texts]
+
+    def embed_query(self, text: str) -> list[float]:
+        return self._vec(text)
+
+
 @pytest.fixture(scope="module")
 def client() -> TestClient:
     # Point the app at a throwaway SQLite file BEFORE anything imports settings.
@@ -168,6 +191,7 @@ def client() -> TestClient:
     from app import database
     from app.config import get_settings
     from app.main import create_app
+    from app.services.embeddings import get_embeddings
     from app.services.llm import get_chat_model, get_extraction_model
 
     get_settings.cache_clear()
@@ -176,6 +200,7 @@ def client() -> TestClient:
     app = create_app()
     app.dependency_overrides[get_chat_model] = lambda: FakeChatModel()
     app.dependency_overrides[get_extraction_model] = lambda: FakeChatModel()
+    app.dependency_overrides[get_embeddings] = lambda: FakeEmbeddings()
 
     with TestClient(app) as c:
         yield c

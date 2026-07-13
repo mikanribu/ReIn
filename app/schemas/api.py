@@ -215,6 +215,34 @@ class PortfolioSummary(BaseModel):
     summary: str
 
 
+# --- Knowledge Base RAG -------------------------------------------------------
+
+class KbAskRequest(BaseModel):
+    question: str = Field(..., min_length=1)
+
+
+class KbSource(BaseModel):
+    treaty_id: str
+    reference: str
+    name: str
+
+
+class KbAnswer(BaseModel):
+    answer: str
+    sources: list[KbSource] = Field(default_factory=list)
+
+
+class KbIndexStatus(BaseModel):
+    embedding_model: str
+    indexed_chunks: int
+    total_treaties: int
+    ready: bool
+
+
+class KbReindexResult(BaseModel):
+    indexed_chunks: int
+
+
 # --- Dashboard KPIs -----------------------------------------------------------
 
 class StatsOut(BaseModel):

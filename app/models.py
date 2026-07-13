@@ -143,6 +143,29 @@ class DataPoint(Base):
     version: Mapped[TreatyVersion] = relationship(back_populates="data_points")
 
 
+class TreatyChunk(Base):
+    """A retrievable text chunk for the Knowledge Base semantic index.
+
+    Each chunk is a compact, human-readable rendering of one treaty (its key
+    data points) plus its embedding vector. Stored as JSON so it works on both
+    SQLite (dev) and Postgres; a pgvector column is the production optimization.
+    The ``embedding_model`` tag lets retrieval ignore vectors produced by a
+    different model, so switching providers just means reindexing.
+    """
+
+    __tablename__ = "treaty_chunks"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    treaty_id: Mapped[str] = mapped_column(ForeignKey("treaties.id"), index=True)
+    treaty_reference: Mapped[str] = mapped_column(String(256))
+    treaty_name: Mapped[str] = mapped_column(String(512))
+    chunk_index: Mapped[int] = mapped_column(Integer, default=0)
+    content: Mapped[str] = mapped_column(Text)
+    embedding: Mapped[list] = mapped_column(JSON)
+    embedding_model: Mapped[str] = mapped_column(String(128), index=True)
+    created_at: Mapped[datetime] = mapped_column(default=utcnow)
+
+
 class AuditLog(Base):
     """Append-only audit trail. Entries are hash-chained: each entry's hash
     covers the previous entry's hash, so any tampering with history breaks
