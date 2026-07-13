@@ -211,6 +211,10 @@ class PortfolioAnalytics(BaseModel):
     by_currency: list[CurrencyRow]
 
 
+class PortfolioSummary(BaseModel):
+    summary: str
+
+
 # --- Dashboard KPIs -----------------------------------------------------------
 
 class StatsOut(BaseModel):

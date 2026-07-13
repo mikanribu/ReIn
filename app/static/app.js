@@ -265,6 +265,16 @@ async function renderKbInsights(content) {
 
   content.innerHTML = `
     ${kpis}
+    <div class="panel" id="kb-summary-panel">
+      <div class="row" style="justify-content:space-between">
+        <h2 style="margin:0">Executive summary</h2>
+        <button class="secondary" id="kb-summary-btn">Generate summary</button>
+      </div>
+      <div id="kb-summary" class="kb-summary muted small">
+        Generate a narrative summary of the portfolio. The text is written by the assistant but grounded in the
+        exact figures above — it can't invent numbers.
+      </div>
+    </div>
     <div class="kb-charts">${charts}</div>
     <div class="panel">
       <h2>Totals by currency</h2>
@@ -274,6 +284,54 @@ async function renderKbInsights(content) {
         <tbody>${currencyRows}</tbody>
       </table>
     </div>`;
+
+  const summaryBtn = document.getElementById("kb-summary-btn");
+  const summaryEl = document.getElementById("kb-summary");
+  summaryBtn.onclick = async () => {
+    summaryBtn.disabled = true;
+    const loader = startLoader(summaryEl, [
+      "Reading the portfolio figures…",
+      "Writing the executive summary…",
+      "Almost there…",
+    ]);
+    try {
+      const body = await post("/analytics/summary", {});
+      loader.stop();
+      summaryEl.classList.remove("muted", "small");
+      summaryEl.innerHTML = simpleMarkdown(body.summary);
+    } catch (err) {
+      loader.stop();
+      summaryEl.innerHTML = `<div class="banner error">${esc(err.message)}</div>`;
+    } finally {
+      summaryBtn.disabled = false;
+    }
+  };
+}
+
+// Minimal markdown for narrative text: escapes first, then bullets, paragraphs,
+// **bold** and *italic*. (The chat widget has its own copy scoped to its closure.)
+function simpleMarkdown(text) {
+  const lines = esc(text).split("\n");
+  const out = [];
+  let inList = false;
+  const closeList = () => { if (inList) { out.push("</ul>"); inList = false; } };
+  const inline = (s) => s
+    .replace(/\*\*([^*]+?)\*\*/g, "<strong>$1</strong>")
+    .replace(/\*([^*\n]+?)\*/g, "<em>$1</em>");
+  for (const line of lines) {
+    const bullet = line.match(/^\s*[-*]\s+(.*)$/);
+    if (bullet) {
+      if (!inList) { out.push("<ul>"); inList = true; }
+      out.push(`<li>${inline(bullet[1])}</li>`);
+    } else if (line.trim() === "") {
+      closeList();
+    } else {
+      closeList();
+      out.push(`<p>${inline(line)}</p>`);
+    }
+  }
+  closeList();
+  return out.join("");
 }
 
 function renderKbIngest(content) {

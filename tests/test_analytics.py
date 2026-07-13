@@ -41,3 +41,26 @@ def test_bucket_counts_sum_to_total(client):
     total = body["total_treaties"]
     for breakdown in body["breakdowns"]:
         assert sum(b["count"] for b in breakdown["buckets"]) == total
+
+
+def test_portfolio_summary(client):
+    _seed_treaty(client)
+    resp = client.post("/analytics/summary", json={})
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["summary"].strip() != ""
+
+
+def test_summary_brief_is_grounded_in_analytics(client):
+    # The brief handed to the model must carry the real figures, so the model
+    # can't invent them. Check the brief directly.
+    _seed_treaty(client)
+    from sqlalchemy.orm import Session
+
+    from app.database import get_engine
+    from app.services.summary import _brief
+    with Session(get_engine()) as db:
+        brief, total = _brief(db)
+    assert total >= 1
+    assert "Total treaties:" in brief
+    assert "Totals by currency" in brief
+    assert "CHF" in brief
