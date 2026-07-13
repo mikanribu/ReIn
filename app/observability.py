@@ -1,8 +1,12 @@
-"""MLflow tracing + experiment helpers."""
+"""MLflow tracing + experiment helpers.
+
+MLflow is an optional dependency: it is imported lazily inside the functions
+below (never at module import time), so the app runs normally whether or not
+mlflow is installed, and whether or not tracing is enabled.
+"""
 
 from contextlib import contextmanager
 import logging
-import mlflow.langchain
 
 from app.config import get_settings
 
@@ -18,6 +22,7 @@ def init_mlflow() -> None:
 
     try:
         import mlflow
+        import mlflow.langchain  # noqa: F401 — needed for autolog()
 
         mlflow.set_tracking_uri(settings.mlflow_tracking_uri)
         mlflow.set_experiment(settings.mlflow_experiment)
