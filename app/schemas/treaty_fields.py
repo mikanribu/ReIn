@@ -1,23 +1,108 @@
-"""The defined data-point catalog for reinsurance treaties.
+"""The defined data-point catalogue for reinsurance treaties.
 
-This module is the single place to maintain when the set of extracted data
-points changes: add/remove a field on ``TreatyExtraction`` and everything
-else (LLM structured output, field catalog endpoint, validation of manual
-edits, database rows) follows automatically.
+The catalogue is metadata-driven: ``_FIELDS`` is the single source of truth,
+listing every extracted data point with its **category**, whether it is
+**mandatory or optional**, and a description. The Pydantic extraction model,
+the field catalogue endpoint, edit/amendment validation and the database rows
+are all derived from it, so they can never drift.
 
-Each field is wrapped in ``ExtractedField`` so the LLM must return not only
-the value but also the exact source quote, its location in the document, a
-confidence score and a short rationale — this is what makes the extraction
-transparent and reviewable.
+Each field is wrapped in ``ExtractedField`` so the LLM must return not only the
+value but also the exact source quote, its location, a confidence score and a
+short rationale — this is what makes the extraction transparent and reviewable.
+
+Note: internal system identifiers (treaty_id, product_id, benefit_id,
+cession_rule_id) are assigned by the system, not extracted from the document,
+so they are not part of this extraction catalogue.
 """
 from datetime import date
 from typing import Optional, Union
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, create_model
 
 # JSON-friendly value union kept deliberately simple so it survives
 # structured-output schema restrictions and database JSON storage.
 FieldValue = Optional[Union[str, float, int, bool, list[str]]]
+
+# Category labels used to group the catalogue.
+CAT_TREATY = "Treaty"
+CAT_PRODUCT = "Product & Benefit"
+CAT_CESSION = "Cession & Layers"
+
+# (field_key, requirement, category, description)
+# ``requirement`` keeps the exact wording (incl. "Mandatory where applicable"
+# etc.); ``mandatory`` is derived from it below.
+_FIELDS: list[tuple[str, str, str, str]] = [
+    # --- Treaty -------------------------------------------------------------
+    ("treaty_code", "Optional", CAT_TREATY,
+     "Treaty reference stated in the contract, e.g. PHL-CGR-QS-2027-01. Optional: some scanned/legacy treaties lack a formal code."),
+    ("treaty_name", "Mandatory", CAT_TREATY,
+     "Name/title of the treaty, e.g. 'Quota Share Life Reinsurance Agreement'."),
+    ("treaty_type", "Mandatory", CAT_TREATY,
+     "Type of arrangement, e.g. quota_share, surplus, excess_of_loss, coinsurance, yrt, stop_loss."),
+    ("reinsurance_basis", "Mandatory", CAT_TREATY,
+     "automatic, facultative, automatic_and_facultative, obligatory, or retrocession."),
+    ("cedant_name", "Mandatory", CAT_TREATY, "Legal name of the ceding company."),
+    ("reinsurer_name", "Mandatory", CAT_TREATY, "Legal name of the reinsurer."),
+    ("lead_reinsurer_indicator", "Optional", CAT_TREATY,
+     "Whether this reinsurer is the lead reinsurer in a panel (true/false)."),
+    ("party_share_percentage", "Optional", CAT_TREATY,
+     "Reinsurer participation share (number, %) if multiple reinsurers participate."),
+    ("treaty_effective_start_date", "Mandatory", CAT_TREATY,
+     "Date the treaty becomes effective (ISO date YYYY-MM-DD)."),
+    ("treaty_effective_end_date", "Mandatory", CAT_TREATY,
+     "Date the treaty ends (ISO date). Use null if open-ended/continuous."),
+    ("new_business_start_date", "Mandatory", CAT_TREATY,
+     "Date from which newly incepted policies can be ceded (ISO date). Often equals the effective start date."),
+    ("new_business_end_date", "Optional", CAT_TREATY,
+     "Date after which no new business may be ceded (ISO date)."),
+    ("contract_currency_code", "Mandatory", CAT_TREATY,
+     "Currency for treaty limits, premiums and settlement (ISO code, e.g. USD)."),
+    ("settlement_currency_code", "Mandatory", CAT_TREATY,
+     "Currency in which reinsurance balances are settled (ISO code)."),
+
+    # --- Product & Benefit --------------------------------------------------
+    ("product_code", "Mandatory", CAT_PRODUCT, "Source or treaty product code, where available."),
+    ("product_name", "Mandatory", CAT_PRODUCT, "Product covered by the treaty."),
+    ("product_type", "Mandatory", CAT_PRODUCT,
+     "Product category, e.g. term_life, whole_life, universal_life, family_income, mortgage_protection."),
+    ("product_scope_status", "Mandatory", CAT_PRODUCT,
+     "Whether the product is included, excluded, partially_included, or subject_to_endorsement."),
+    ("benefit_code", "Mandatory", CAT_PRODUCT, "Source or treaty benefit code, where available."),
+    ("benefit_name", "Mandatory", CAT_PRODUCT,
+     "Benefit name, e.g. death benefit, terminal illness, waiver, family income."),
+    ("benefit_type", "Mandatory", CAT_PRODUCT,
+     "Type of benefit: death, terminal_illness, accidental_death, income_benefit, waiver, rider."),
+
+    # --- Cession & Layers ---------------------------------------------------
+    # Layers are pre-flattened to 1-3 columns; store the cession rule at treaty level.
+    ("country_code", "Mandatory", CAT_CESSION, "Country/jurisdiction the cession rule applies to (ISO code)."),
+    ("cession_effective_start_date", "Mandatory", CAT_CESSION, "Effective date of the cession rule (ISO date)."),
+    ("cession_effective_end_date", "Optional", CAT_CESSION, "End date of the cession rule (ISO date)."),
+    ("policy_inception_start_date", "Mandatory", CAT_CESSION,
+     "Policy inception cohort start date for the cession rule (ISO date)."),
+    ("policy_inception_end_date", "Optional", CAT_CESSION,
+     "Policy inception cohort end date for the cession rule (ISO date)."),
+    ("cession_basis", "Mandatory", CAT_CESSION,
+     "quota_share, surplus, layered_quota_share, excess, modified_coinsurance, etc."),
+    ("layer_number", "Mandatory", CAT_CESSION, "Layer identifier (number), e.g. 1, 2, 3."),
+    ("layer_name", "Optional", CAT_CESSION, "Descriptive layer name, e.g. 'Base quota share layer'."),
+    ("layer_1_ceding_ratio", "Mandatory where applicable", CAT_CESSION,
+     "Reinsurer ceding percentage for layer 1 (number, %)."),
+    ("layer_2_ceding_ratio", "Optional", CAT_CESSION, "Reinsurer ceding percentage for layer 2, if present (number, %)."),
+    ("layer_3_ceding_ratio", "Optional", CAT_CESSION, "Reinsurer ceding percentage for layer 3, if present (number, %)."),
+    ("cedant_retention_ratio", "Mandatory", CAT_CESSION, "Percentage retained by the cedant under the rule/layer (number, %)."),
+    ("reinsurer_cession_ratio", "Mandatory", CAT_CESSION, "Percentage ceded to the reinsurer under the rule/layer (number, %)."),
+    ("layer_attachment_amount", "Mandatory for layered/surplus", CAT_CESSION, "Amount at which the layer begins."),
+    ("layer_limit_amount", "Mandatory for layered/surplus", CAT_CESSION, "Maximum amount covered by the layer."),
+    ("layer_detachment_amount", "Optional", CAT_CESSION, "Amount at which the layer ends."),
+    ("maximum_cedant_retention_amount", "Mandatory", CAT_CESSION,
+     "Maximum retention retained by the cedant, e.g. 1000000."),
+    ("aggregation_basis", "Mandatory", CAT_CESSION,
+     "per_life, per_policy, per_benefit, per_claim, across_policies, or across_benefits."),
+    ("priority_order", "Mandatory", CAT_CESSION, "Rule priority (number) where multiple rules overlap."),
+]
+
+CATEGORY_ORDER = [CAT_TREATY, CAT_PRODUCT, CAT_CESSION]
 
 
 class ExtractedField(BaseModel):
@@ -28,7 +113,7 @@ class ExtractedField(BaseModel):
         description=(
             "The extracted value. Use null if the treaty does not specify it. "
             "Use numbers for amounts/percentages (percentage as a number, e.g. 25 for 25%), "
-            "ISO dates (YYYY-MM-DD) for dates, and lists of strings for enumerations."
+            "ISO dates (YYYY-MM-DD) for dates, true/false for indicators, and lists of strings for enumerations."
         ),
     )
     source_quote: Optional[str] = Field(
@@ -51,140 +136,46 @@ class ExtractedField(BaseModel):
     )
 
 
-class TreatyExtraction(BaseModel):
-    """All defined data points to extract from a reinsurance treaty.
-
-    Every field must be present in the output; use value=null when the
-    treaty does not address the item.
-    """
-
-    # --- Identification ---
-    treaty_name: ExtractedField = Field(..., description="Full name/title of the treaty.")
-    treaty_reference: ExtractedField = Field(..., description="Contract/treaty reference number or unique identifier.")
-    treaty_type: ExtractedField = Field(
-        ...,
-        description=(
-            "Type of treaty. One of: 'quota_share', 'surplus', 'per_risk_xl', "
-            "'per_event_xl', 'cat_xl', 'stop_loss', 'facultative_obligatory', 'other'."
-        ),
-    )
-    #form: ExtractedField = Field(..., description="'proportional' or 'non_proportional'.")
-
-    # -- Reinsurance Treaty Details ---
-    treaty_addendum_number: ExtractedField = Field(..., description="Unique identifier of the treaty addendum, if any.")
-    treaty_amendment_number: ExtractedField = Field(..., description="Unique identifier of the treaty amendment, if any.")
-    
-    # --- Parties ---
-    treaty_company_identifier: ExtractedField = Field(..., description="Name of the ceding company (the reinsured).")
-    reinsurers: ExtractedField = Field(
-        ..., description="List of reinsurer names with their share percentage if stated, e.g. ['Re A (60%)', 'Re B (40%)']."
-    )
-    broker: ExtractedField = Field(..., description="Intermediary/broker name, if any.")
-
-    # --- Period & scope ---
-    inception_date: ExtractedField = Field(..., description="Inception date of the period of coverage (ISO date).")
-    expiry_date: ExtractedField = Field(..., description="Expiry date, or 'continuous' if the treaty is continuous.")
-
-    #territory: ExtractedField = Field(..., description="Territorial scope of the treaty.")
-    #lines_of_business: ExtractedField = Field(..., description="Covered classes/lines of business as a list of strings.")
-    currency: ExtractedField = Field(..., description="Contract currency (ISO code if identifiable, e.g. 'EUR').")
-
-    treaty_rept_frequency_value: ExtractedField = Field(
-        ..., description="Reporting frequency value (number, e.g. 3 for quarterly)."
-    )
-    treaty_settlement_exchange_rate_type: ExtractedField = Field(
-        ..., description=(
-            "Settlement/exchange rate type (e.g. 'current', 'fixed'). "
-            "Current = Treaty payments are settled using current exchange rate. "
-            "Fixed = Treaty payments are settled using a fixed exchange rate."
-        )
-    )
-
-    # --- Structure / economics ---
-    cession_percentage: ExtractedField = Field(
-        ..., description="For quota share: ceded percentage (number, e.g. 30 for 30%)."
-    )
-    retention: ExtractedField = Field(
-        ...,
-        description=(
-            "Cedent's retention: for quota share the retained percentage; for surplus the retained line; "
-            "for XL the priority/deductible amount."
-        ),
-    )
-    limit: ExtractedField = Field(
-        ...,
-        description=(
-            "Reinsurer's limit of liability: per-risk/per-event cover amount for XL "
-            "(the 'xs' cover, e.g. 40000000 for '40,000,000 xs 10,000,000'), number of lines for surplus, "
-            "or maximum per-risk cession for quota share."
-        ),
-    )
-    aggregate_limit: ExtractedField = Field(..., description="Annual aggregate limit of liability, if any.")
-    reinstatements: ExtractedField = Field(
-        ..., description="Number and cost of reinstatements, e.g. '2 @ 100% additional premium pro rata to amount'."
-    )
-    event_limit: ExtractedField = Field(..., description="Per-event limit / loss occurrence limit, if any.")
-
-
-    # --- Premium ---
-    premium_rate: ExtractedField = Field(
-        ..., description="Premium rate on subject premium income (number, %), or flat premium amount context."
-    )
-    treaty_ratio: ExtractedField = Field(..., description="Treaty Reinsurance ratio, if any.", examples=[0.35, 0.45])
-    treaty_share_ratio: ExtractedField = Field(..., description="Treaty share ratio, if any.", examples=[0.25, 0.70])
-
-    minimum_premium: ExtractedField = Field(..., description="Minimum premium amount.")
-    deposit_premium: ExtractedField = Field(..., description="Deposit/provisional premium amount and payment schedule.")
-    adjustable_rate: ExtractedField = Field(
-        ..., description="Adjustable/burning-cost rate details, e.g. 'min 1.5% max 4.5%, loading 100/70'."
-    )
-    premium_payment_terms: ExtractedField = Field(..., description="Premium payment schedule/instalments.")
-    estimated_premium_income: ExtractedField = Field(
-        ..., description="Estimated/Gross Net Premium Income (EPI/GNPI) the rates apply to."
-    )
-
-    #--- Commission Rate ---
-    ceding_commission: ExtractedField = Field(
-        ..., description="Flat ceding commission percentage, or provisional commission for sliding scale."
-    )
-    sliding_scale_commission: ExtractedField = Field(
-        ..., description="Sliding scale terms: min/max commission and corresponding loss ratios."
-    )
-    profit_commission: ExtractedField = Field(
-        ..., description="Profit commission percentage and basis (e.g. '20% after 5% management expenses')."
-    )
-    brokerage: ExtractedField = Field(..., description="Brokerage percentage, if stated.")
-    loss_participation: ExtractedField = Field(
-        ..., description="Loss participation / loss corridor clause details, if any."
-    )
-
-    # --- Legal / other ---
-    exclusions: ExtractedField = Field(..., description="List of exclusions.")
-    special_conditions: ExtractedField = Field(..., description="Notable special conditions/warranties as a list.")
-    governing_law: ExtractedField = Field(..., description="Governing law / jurisdiction.")
-    arbitration: ExtractedField = Field(..., description="Arbitration clause summary (seat, rules).")
-    special_termination: ExtractedField = Field(..., description="Special termination / sudden death clause triggers.")
+# Build the extraction model from the catalogue so the two never diverge.
+TreatyExtraction = create_model(
+    "TreatyExtraction",
+    __doc__="All defined data points to extract from a reinsurance treaty. "
+            "Every field must be present in the output; use value=null when the "
+            "treaty does not address the item.",
+    **{key: (ExtractedField, Field(..., description=desc)) for key, _req, _cat, desc in _FIELDS},
+)
 
 
 # ---------------------------------------------------------------------------
-# Field catalog derived from the model — used by the API and by validation of
-# manual edits/amendments, so the catalog can never drift from the schema.
+# Catalogue accessors derived from _FIELDS
 # ---------------------------------------------------------------------------
-
-def field_catalog() -> dict[str, str]:
-    """Mapping of field_key -> description for every defined data point."""
-    return {
-        key: (info.description or key)
-        for key, info in TreatyExtraction.model_fields.items()
-    }
-
 
 def field_label(key: str) -> str:
     """Human-readable label derived from the field key."""
     return key.replace("_", " ").title()
 
 
-FIELD_KEYS: frozenset[str] = frozenset(TreatyExtraction.model_fields.keys())
+def field_catalog() -> dict[str, str]:
+    """Mapping of field_key -> description (kept for backward compatibility)."""
+    return {key: desc for key, _req, _cat, desc in _FIELDS}
+
+
+def field_metadata() -> list[dict]:
+    """Full per-field metadata: key, label, category, requirement, mandatory, description."""
+    return [
+        {
+            "key": key,
+            "label": field_label(key),
+            "category": cat,
+            "requirement": req,
+            "mandatory": req.startswith("Mandatory"),
+            "description": desc,
+        }
+        for key, req, cat, desc in _FIELDS
+    ]
+
+
+FIELD_KEYS: frozenset[str] = frozenset(key for key, *_ in _FIELDS)
 
 
 # ---------------------------------------------------------------------------
@@ -211,12 +202,12 @@ class AmendedField(BaseModel):
 
 class AmendmentExtraction(BaseModel):
     """Changes described by a treaty adjustment/endorsement document,
-    mapped against the defined data-point catalog."""
+    mapped against the defined data-point catalogue."""
 
     summary: str = Field(..., description="One-paragraph summary of what the amendment changes.")
     effective_date: Optional[date] = Field(
         None, description="Date the amendment takes effect (ISO date), if stated."
     )
     changes: list[AmendedField] = Field(
-        ..., description="Every data point whose value changes. Empty if the document changes nothing in the catalog."
+        ..., description="Every data point whose value changes. Empty if the document changes nothing in the catalogue."
     )

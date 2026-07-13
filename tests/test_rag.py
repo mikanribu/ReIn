@@ -28,13 +28,13 @@ def test_reindex_then_status(client):
 def test_ask_is_grounded_with_sources(client):
     _seed(client)
     client.post("/kb/reindex")
-    r = client.post("/kb/ask", json={"question": "Which treaties exclude cyber?"})
+    r = client.post("/kb/ask", json={"question": "Which treaties are quota share?"})
     assert r.status_code == 200, r.text
     body = r.json()
     assert body["answer"].strip() != ""
-    # The sample treaty (CAT-XL-2026-001) mentions cyber in its exclusions, so it
-    # should be retrieved and cited.
-    assert any("CAT-XL-2026-001" == s["reference"] for s in body["sources"])
+    # The seeded treaty (QS-LIFE-2027-01) is a quota share, so it should be
+    # retrieved and cited.
+    assert any("QS-LIFE-2027-01" == s["reference"] for s in body["sources"])
 
 
 def test_ask_rejects_empty_question(client):
