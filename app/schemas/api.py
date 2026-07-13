@@ -47,6 +47,7 @@ class DataPointEdit(BaseModel):
 
 class VersionSummary(BaseModel):
     id: str
+    treaty_id: str
     version_number: int
     status: str
     origin: str
@@ -181,6 +182,33 @@ class ChatResponse(BaseModel):
         default_factory=list,
         description="Treaty field labels the answer drew on (grounded replies only).",
     )
+
+
+# --- Portfolio analytics (Knowledge Base) -------------------------------------
+
+class AnalyticsBucket(BaseModel):
+    value: str
+    count: int
+
+
+class AnalyticsBreakdown(BaseModel):
+    key: str
+    label: str
+    buckets: list[AnalyticsBucket]
+
+
+class CurrencyRow(BaseModel):
+    currency: str
+    count: int
+    limit: float
+    aggregate_limit: float
+    estimated_premium_income: float
+
+
+class PortfolioAnalytics(BaseModel):
+    total_treaties: int
+    breakdowns: list[AnalyticsBreakdown]
+    by_currency: list[CurrencyRow]
 
 
 # --- Dashboard KPIs -----------------------------------------------------------
