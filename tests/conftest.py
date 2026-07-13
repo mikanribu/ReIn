@@ -29,86 +29,76 @@ def _f(value=None, quote=None, location=None, confidence=0.0, rationale=None) ->
 
 
 def make_fake_extraction() -> TreatyExtraction:
-    """A canned extraction mirroring samples/sample_treaty.txt."""
+    """A canned life-reinsurance extraction for the current catalogue."""
     fields = {key: _f() for key in TreatyExtraction.model_fields}
     fields.update(
-        treaty_name=_f("Property Catastrophe Excess of Loss Reinsurance Agreement",
-                       quote="PROPERTY CATASTROPHE EXCESS OF LOSS REINSURANCE AGREEMENT",
-                       location="Title", confidence=0.99),
-        treaty_reference=_f("CAT-XL-2026-001", quote="Contract Reference: CAT-XL-2026-001",
-                            location="Header", confidence=0.99),
-        treaty_type=_f("cat_xl", quote="each and every loss occurrence", location="Article 3",
-                       confidence=0.95, rationale="Per-occurrence property cat cover."),
-        form=_f("non_proportional", confidence=0.95),
-        cedent=_f("Alpine Insurance Company S.A.", quote="ALPINE INSURANCE COMPANY S.A., Zurich",
-                  location="Preamble", confidence=0.99),
-        reinsurers=_f(["Helvetia Re (60%)", "Nordic Re (40%)"],
-                      quote="Helvetia Re (60%), Nordic Re (40%)", location="Preamble", confidence=0.98),
-        broker=_f("Meridian Reinsurance Brokers Ltd", confidence=0.97),
-        inception_date=_f("2026-01-01", quote="from 1 January 2026", location="Article 2", confidence=0.99),
-        expiry_date=_f("2026-12-31", quote="to 31 December 2026", location="Article 2", confidence=0.99),
-        attachment_basis=_f("losses_occurring", quote="losses occurring during the period",
-                            location="Article 2", confidence=0.97),
-        territory=_f("Switzerland, Germany and Austria", location="Article 1", confidence=0.97),
-        lines_of_business=_f(["Property", "Fire", "Engineering", "Allied Perils"],
-                             location="Article 1", confidence=0.9),
-        currency=_f("CHF", quote="expressed in Swiss Francs (CHF)", location="Article 6", confidence=0.99),
-        retention=_f(10_000_000, quote="in excess of CHF 10,000,000 (the \"Priority\")",
-                     location="Article 3", confidence=0.98),
-        limit=_f(40_000_000, quote="up to a limit of CHF 40,000,000 each and every loss occurrence",
-                 location="Article 3", confidence=0.98),
-        aggregate_limit=_f(120_000_000, quote="shall not exceed CHF 120,000,000 in the annual period",
-                           location="Article 3", confidence=0.97),
-        reinstatements=_f("2 @ 100% additional premium pro rata to amount",
-                          quote="reinstated twice, each reinstatement at 100% additional premium",
-                          location="Article 4", confidence=0.95),
-        premium_rate=_f(2.85, quote="a rate of 2.85% of the Company's Gross Net Premium Income",
-                        location="Article 5", confidence=0.98),
-        minimum_premium=_f(10_500_000, quote="a minimum premium of CHF 10,500,000",
-                           location="Article 5", confidence=0.98),
-        deposit_premium=_f("CHF 12,000,000 in four equal quarterly instalments",
-                           location="Article 5", confidence=0.95),
-        estimated_premium_income=_f(450_000_000, quote="GNPI, estimated at CHF 450,000,000",
-                                    location="Article 5", confidence=0.97),
-        cash_loss_limit=_f(5_000_000, quote="exceeding CHF 5,000,000 (cash loss limit)",
-                           location="Article 7", confidence=0.97),
-        claims_notification=_f("Notify when UNL estimated to exceed 50% of the Priority",
-                               location="Article 8", confidence=0.9),
-        exclusions=_f(["War and civil war", "Nuclear energy risks", "Cyber (LMA 5455)",
-                       "Pollution unless from covered peril", "Terrorism (NMA 2930)"],
-                      location="Article 9", confidence=0.95),
-        governing_law=_f("Switzerland", location="Article 11", confidence=0.98),
-        arbitration=_f("Zurich, Swiss Rules of International Arbitration",
-                       location="Article 11", confidence=0.97),
-        special_termination=_f("Loss of 50% paid-up capital, insolvency, rating below A- (AM Best)",
-                               location="Article 10", confidence=0.93),
+        treaty_code=_f("QS-LIFE-2027-01", quote="Treaty Reference: QS-LIFE-2027-01",
+                       location="Header", confidence=0.99),
+        treaty_name=_f("Quota Share Life Reinsurance Agreement",
+                       quote="QUOTA SHARE LIFE REINSURANCE AGREEMENT", location="Title", confidence=0.99),
+        treaty_type=_f("quota_share", quote="on a quota share basis", location="Article 1",
+                       confidence=0.97, rationale="Proportional quota share cover."),
+        reinsurance_basis=_f("automatic", quote="automatic reinsurance", location="Article 1", confidence=0.96),
+        cedant_name=_f("Alpine Life Assurance S.A.", quote="ALPINE LIFE ASSURANCE S.A.",
+                       location="Preamble", confidence=0.99),
+        reinsurer_name=_f("Helvetia Re", quote="HELVETIA RE", location="Preamble", confidence=0.99),
+        lead_reinsurer_indicator=_f(True, location="Preamble", confidence=0.9),
+        party_share_percentage=_f(60, quote="60% share", location="Preamble", confidence=0.95),
+        treaty_effective_start_date=_f("2027-01-01", quote="effective 1 January 2027",
+                                       location="Article 2", confidence=0.99),
+        new_business_start_date=_f("2027-01-01", quote="new business from 1 January 2027",
+                                   location="Article 2", confidence=0.98),
+        contract_currency_code=_f("USD", quote="expressed in US Dollars (USD)", location="Article 6", confidence=0.99),
+        settlement_currency_code=_f("USD", quote="settled in USD", location="Article 6", confidence=0.98),
+        product_code=_f("TL-100", location="Schedule A", confidence=0.9),
+        product_name=_f("Term Life 20", location="Schedule A", confidence=0.95),
+        product_type=_f("term_life", quote="term life product", location="Schedule A", confidence=0.95),
+        product_scope_status=_f("included", location="Schedule A", confidence=0.95),
+        benefit_name=_f("Death Benefit", location="Schedule B", confidence=0.96),
+        benefit_type=_f("death", quote="death benefit", location="Schedule B", confidence=0.96),
+        country_code=_f("PH", quote="Philippines", location="Article 1", confidence=0.95),
+        cession_effective_start_date=_f("2027-01-01", location="Article 3", confidence=0.95),
+        policy_inception_start_date=_f("2027-01-01", location="Article 3", confidence=0.93),
+        cession_basis=_f("quota_share", quote="ceded on a quota share basis", location="Article 3", confidence=0.97),
+        layer_number=_f(1, location="Article 3", confidence=0.95),
+        layer_name=_f("Base quota share layer", location="Article 3", confidence=0.9),
+        layer_1_ceding_ratio=_f(60, quote="60% ceded to the Reinsurer", location="Article 3", confidence=0.97),
+        cedant_retention_ratio=_f(40, quote="the Company shall retain 40%", location="Article 3", confidence=0.98),
+        reinsurer_cession_ratio=_f(60, quote="the Reinsurer's share shall be 60%",
+                                   location="Article 3", confidence=0.98),
+        layer_attachment_amount=_f(0, location="Article 3", confidence=0.9),
+        layer_limit_amount=_f(5_000_000, quote="up to USD 5,000,000 per life", location="Article 3", confidence=0.97),
+        maximum_cedant_retention_amount=_f(1_000_000, quote="maximum retention of USD 1,000,000",
+                                           location="Article 4", confidence=0.98),
+        aggregation_basis=_f("per_life", quote="aggregated per life", location="Article 4", confidence=0.95),
+        priority_order=_f(1, location="Article 3", confidence=0.9),
     )
     return TreatyExtraction(**fields)
 
 
 def make_fake_amendment() -> AmendmentExtraction:
-    """A canned amendment mirroring samples/sample_amendment.txt."""
+    """A canned amendment for the current catalogue."""
     return AmendmentExtraction(
-        summary="Addendum No. 1: limit increased to CHF 50m, aggregate to CHF 150m, "
-                "premium rate to 3.10%, minimum premium to CHF 11.5m, effective 1 July 2026.",
-        effective_date="2026-07-01",
+        summary="Addendum No. 1: reinsurer cession increased to 70% (retention 30%), "
+                "layer limit to USD 7.5m, maximum retention to USD 1.25m, effective 1 July 2027.",
+        effective_date="2027-07-01",
         changes=[
-            AmendedField(field_key="limit", new_value=50_000_000,
-                         source_quote="increased from CHF 40,000,000 to CHF 50,000,000",
+            AmendedField(field_key="reinsurer_cession_ratio", new_value=70,
+                         source_quote="the Reinsurer's share is increased from 60% to 70%",
                          source_location="Clause 1", confidence=0.98,
-                         rationale="Occurrence limit increased."),
-            AmendedField(field_key="aggregate_limit", new_value=150_000_000,
-                         source_quote="aggregate limit is increased from CHF 120,000,000 to CHF 150,000,000",
+                         rationale="Cession share increased."),
+            AmendedField(field_key="cedant_retention_ratio", new_value=30,
+                         source_quote="the Company's retention is reduced to 30%",
                          source_location="Clause 1", confidence=0.98,
-                         rationale="Annual aggregate increased."),
-            AmendedField(field_key="premium_rate", new_value=3.10,
-                         source_quote="premium rate is increased from 2.85% to 3.10%",
-                         source_location="Clause 2", confidence=0.98,
-                         rationale="Rate increase for the larger limit."),
-            AmendedField(field_key="minimum_premium", new_value=11_500_000,
-                         source_quote="minimum premium is increased to CHF 11,500,000",
+                         rationale="Retention reduced accordingly."),
+            AmendedField(field_key="layer_limit_amount", new_value=7_500_000,
+                         source_quote="the layer limit is increased to USD 7,500,000",
                          source_location="Clause 2", confidence=0.97,
-                         rationale="Minimum premium increased."),
+                         rationale="Layer limit increased."),
+            AmendedField(field_key="maximum_cedant_retention_amount", new_value=1_250_000,
+                         source_quote="maximum retention is increased to USD 1,250,000",
+                         source_location="Clause 2", confidence=0.97,
+                         rationale="Maximum retention increased."),
         ],
     )
 
@@ -151,9 +141,9 @@ class FakeChatModel:
         portfolio = "PORTFOLIO OVERVIEW" in system
         reply = f"[fake reply|grounded={grounded}|portfolio={portfolio}] You asked: {last_user}"
         if grounded:
-            # 'Limit' is a real field label in the seeded treaty; 'Bogus Field'
-            # is not and must be filtered out by the service.
-            reply += "\nSOURCES: Limit; Bogus Field"
+            # 'Reinsurer Cession Ratio' is a real field label in the seeded
+            # treaty; 'Bogus Field' is not and must be filtered out.
+            reply += "\nSOURCES: Reinsurer Cession Ratio; Bogus Field"
         return FakeAIMessage(reply)
 
 

@@ -200,9 +200,8 @@ class AnalyticsBreakdown(BaseModel):
 class CurrencyRow(BaseModel):
     currency: str
     count: int
-    limit: float
-    aggregate_limit: float
-    estimated_premium_income: float
+    layer_limit_amount: float
+    maximum_cedant_retention_amount: float
 
 
 class PortfolioAnalytics(BaseModel):

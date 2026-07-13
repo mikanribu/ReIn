@@ -20,19 +20,20 @@ def test_portfolio_analytics_shape_and_counts(client):
     assert body["total_treaties"] >= 1
 
     dims = {b["key"]: b for b in body["breakdowns"]}
-    assert {"treaty_type", "currency", "treaty_settlement_exchange_rate_type"} <= set(dims)
+    assert {"treaty_type", "reinsurance_basis", "contract_currency_code",
+            "product_type", "cession_basis"} <= set(dims)
 
-    # The fake extraction is a CHF cat_xl treaty, so those buckets exist.
+    # The fake extraction is a USD quota-share treaty, so those buckets exist.
     type_values = {b["value"] for b in dims["treaty_type"]["buckets"]}
-    assert any("cat xl" in v for v in type_values)
+    assert any("quota share" in v for v in type_values)
 
-    # Per-currency totals sum only within a currency; CHF should carry the
-    # sample's limit (40,000,000) and EPI (450,000,000).
-    chf = next((r for r in body["by_currency"] if r["currency"] == "CHF"), None)
-    assert chf is not None
-    assert chf["count"] >= 1
-    assert chf["limit"] >= 40_000_000
-    assert chf["estimated_premium_income"] >= 450_000_000
+    # Per-currency totals sum only within a currency; USD carries the sample's
+    # layer limit (5,000,000) and max cedant retention (1,000,000).
+    usd = next((r for r in body["by_currency"] if r["currency"] == "USD"), None)
+    assert usd is not None
+    assert usd["count"] >= 1
+    assert usd["layer_limit_amount"] >= 5_000_000
+    assert usd["maximum_cedant_retention_amount"] >= 1_000_000
 
 
 def test_bucket_counts_sum_to_total(client):
@@ -63,4 +64,4 @@ def test_summary_brief_is_grounded_in_analytics(client):
     assert total >= 1
     assert "Total treaties:" in brief
     assert "Totals by currency" in brief
-    assert "CHF" in brief
+    assert "USD" in brief

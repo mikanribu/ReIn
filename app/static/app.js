@@ -341,9 +341,8 @@ async function renderKbInsights(content) {
     <tr>
       <td class="mono">${esc(r.currency)}</td>
       <td>${r.count}</td>
-      <td>${money.format(r.limit)}</td>
-      <td>${money.format(r.aggregate_limit)}</td>
-      <td>${money.format(r.estimated_premium_income)}</td>
+      <td>${money.format(r.layer_limit_amount)}</td>
+      <td>${money.format(r.maximum_cedant_retention_amount)}</td>
     </tr>`).join("");
 
   content.innerHTML = `
@@ -363,7 +362,7 @@ async function renderKbInsights(content) {
       <h2>Totals by currency</h2>
       <p class="muted small">Amounts are summed within each currency (cross-currency sums are not meaningful).</p>
       <table>
-        <thead><tr><th>Currency</th><th>Treaties</th><th>Limit</th><th>Aggregate limit</th><th>Est. premium income</th></tr></thead>
+        <thead><tr><th>Currency</th><th>Treaties</th><th>Layer limit</th><th>Max cedant retention</th></tr></thead>
         <tbody>${currencyRows}</tbody>
       </table>
     </div>`;

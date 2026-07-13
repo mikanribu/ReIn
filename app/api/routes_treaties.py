@@ -28,7 +28,7 @@ from app.schemas.api import (
     VersionDetail,
     VersionDiff,
 )
-from app.schemas.treaty_fields import field_catalog
+from app.schemas.treaty_fields import field_catalog, field_metadata
 from app.services import audit as audit_service
 from app.services import extraction as extraction_service
 from app.services import stats as stats_service
@@ -65,6 +65,12 @@ def _version_detail(version: TreatyVersion) -> VersionDetail:
 def get_catalog() -> dict[str, str]:
     """The defined data-point catalog (field_key -> description)."""
     return field_catalog()
+
+
+@router.get("/catalog/fields")
+def get_catalog_fields() -> list[dict]:
+    """The catalog with metadata: key, label, category, requirement, mandatory."""
+    return field_metadata()
 
 
 # --------------------------------------------------------------------------

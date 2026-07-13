@@ -52,20 +52,20 @@ def test_extraction_creates_reviewable_draft(client):
     assert set(points) == set(catalog)
 
     # Transparency: extracted values carry provenance.
-    limit = points["limit"]
-    assert limit["value"] == 40_000_000
-    assert "40,000,000" in limit["source_quote"]
-    assert limit["source_location"] == "Article 3"
-    assert limit["confidence"] > 0.9
+    cession = points["reinsurer_cession_ratio"]
+    assert cession["value"] == 60
+    assert "60%" in cession["source_quote"]
+    assert cession["source_location"] == "Article 3"
+    assert cession["confidence"] > 0.9
 
     # Fields the document doesn't address are visibly not_found, not silently dropped.
-    assert points["cession_percentage"]["status"] == "not_found"
-    assert points["cession_percentage"]["value"] is None
+    assert points["layer_2_ceding_ratio"]["status"] == "not_found"
+    assert points["layer_2_ceding_ratio"]["value"] is None
 
     treaties = client.get("/treaties").json()
     assert len(treaties) == 1
     state["treaty_id"] = treaties[0]["id"]
-    assert treaties[0]["reference"] == "CAT-XL-2026-001"
+    assert treaties[0]["reference"] == "QS-LIFE-2027-01"
 
 
 def test_duplicate_extraction_is_rejected(client):
@@ -84,14 +84,14 @@ def test_duplicate_extraction_is_rejected(client):
 def test_edit_data_point_on_draft(client):
     tid = state["treaty_id"]
     resp = client.patch(
-        f"/treaties/{tid}/versions/1/data-points/broker",
-        json={"value": "Meridian Reinsurance Brokers Ltd, London",
+        f"/treaties/{tid}/versions/1/data-points/reinsurer_name",
+        json={"value": "Helvetia Re, Zurich",
               "note": "Added domicile per slip", "actor": "clementine"},
     )
     assert resp.status_code == 200, resp.text
     dp = resp.json()
     assert dp["status"] == "edited"
-    assert dp["value"].endswith("London")
+    assert dp["value"].endswith("Zurich")
 
 
 def test_edit_unknown_field_rejected(client):
@@ -120,14 +120,14 @@ def test_approve_version_1(client):
 
     current = client.get(f"/treaties/{tid}/current").json()
     assert current["version_number"] == 1
-    assert current["values"]["limit"] == 40_000_000
-    assert current["values"]["broker"] == "Meridian Reinsurance Brokers Ltd, London"
+    assert current["values"]["reinsurer_cession_ratio"] == 60
+    assert current["values"]["reinsurer_name"] == "Helvetia Re, Zurich"
 
 
 def test_approved_version_is_immutable(client):
     tid = state["treaty_id"]
     resp = client.patch(
-        f"/treaties/{tid}/versions/1/data-points/limit",
+        f"/treaties/{tid}/versions/1/data-points/reinsurer_cession_ratio",
         json={"value": 1, "actor": "mallory"},
     )
     assert resp.status_code == 409
@@ -150,20 +150,23 @@ def test_amendment_from_document_creates_draft_v2(client):
     assert version["version_number"] == 2
     assert version["status"] == "draft"
     assert version["origin"] == "amendment_document"
-    assert version["effective_date"] == "2026-07-01"
+    assert version["effective_date"] == "2027-07-01"
 
     points = {p["field_key"]: p for p in version["data_points"]}
-    assert points["limit"]["value"] == 50_000_000
-    assert points["limit"]["status"] == "amended_by_document"
-    assert points["retention"]["value"] == 10_000_000
-    assert points["retention"]["status"] == "carried_forward"
+    assert points["reinsurer_cession_ratio"]["value"] == 70
+    assert points["reinsurer_cession_ratio"]["status"] == "amended_by_document"
+    assert points["contract_currency_code"]["value"] == "USD"
+    assert points["contract_currency_code"]["status"] == "carried_forward"
 
     # Diff shows exactly what the amendment changed.
     diff = client.get(f"/treaties/{tid}/versions/2/diff").json()
     changed = {c["field_key"]: c for c in diff["changes"]}
-    assert set(changed) == {"limit", "aggregate_limit", "premium_rate", "minimum_premium"}
-    assert changed["limit"]["old_value"] == 40_000_000
-    assert changed["limit"]["new_value"] == 50_000_000
+    assert set(changed) == {
+        "reinsurer_cession_ratio", "cedant_retention_ratio",
+        "layer_limit_amount", "maximum_cedant_retention_amount",
+    }
+    assert changed["reinsurer_cession_ratio"]["old_value"] == 60
+    assert changed["reinsurer_cession_ratio"]["new_value"] == 70
 
     # Downstream values are untouched until the amendment is approved.
     assert client.get(f"/treaties/{tid}/current").json()["version_number"] == 1
@@ -189,8 +192,8 @@ def test_approve_v2_supersedes_v1(client):
 
     current = client.get(f"/treaties/{tid}/current").json()
     assert current["version_number"] == 2
-    assert current["values"]["limit"] == 50_000_000
-    assert current["values"]["premium_rate"] == 3.10
+    assert current["values"]["reinsurer_cession_ratio"] == 70
+    assert current["values"]["cedant_retention_ratio"] == 30
 
 
 # --------------------------------------------------------------------------
@@ -202,9 +205,9 @@ def test_manual_amendment(client):
     resp = client.post(
         f"/treaties/{tid}/amendments/manual",
         json={
-            "changes": {"broker": "Meridian Re Brokers (Europe) GmbH"},
-            "reason": "Broker entity novated to EU subsidiary",
-            "effective_date": "2026-09-01",
+            "changes": {"reinsurer_name": "Helvetia Re Europe GmbH"},
+            "reason": "Reinsurer entity novated to EU subsidiary",
+            "effective_date": "2027-09-01",
             "actor": "clementine",
         },
     )
@@ -213,16 +216,16 @@ def test_manual_amendment(client):
     assert version["version_number"] == 3
     assert version["origin"] == "manual_amendment"
     points = {p["field_key"]: p for p in version["data_points"]}
-    assert points["broker"]["status"] == "amended_manually"
-    assert points["broker"]["rationale"] == "Broker entity novated to EU subsidiary"
+    assert points["reinsurer_name"]["status"] == "amended_manually"
+    assert points["reinsurer_name"]["rationale"] == "Reinsurer entity novated to EU subsidiary"
 
     resp = client.post(f"/treaties/{tid}/versions/3/approve", json={"actor": "clementine"})
     assert resp.status_code == 200
     current = client.get(f"/treaties/{tid}/current").json()
     assert current["version_number"] == 3
-    assert current["values"]["broker"] == "Meridian Re Brokers (Europe) GmbH"
+    assert current["values"]["reinsurer_name"] == "Helvetia Re Europe GmbH"
     # Prior amendment still in force.
-    assert current["values"]["limit"] == 50_000_000
+    assert current["values"]["reinsurer_cession_ratio"] == 70
 
 
 def test_manual_amendment_unknown_key_rejected(client):
@@ -253,8 +256,8 @@ def test_audit_trail_records_everything(client):
         assert expected in actions, f"missing audit action {expected}"
 
     edit = next(e for e in entries if e["action"] == "data_point.edited")
-    assert edit["details"]["field_key"] == "broker"
-    assert edit["details"]["old_value"] == "Meridian Reinsurance Brokers Ltd"
+    assert edit["details"]["field_key"] == "reinsurer_name"
+    assert edit["details"]["old_value"] == "Helvetia Re"
     assert edit["actor"] == "clementine"
 
 

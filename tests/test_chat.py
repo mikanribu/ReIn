@@ -35,9 +35,10 @@ def test_chat_grounded_in_treaty(client):
     body = resp.json()
     assert body["grounded_in_treaty"] is True
     assert "grounded=True" in body["reply"]
-    # The fake model appends "SOURCES: Limit; Bogus Field"; the service keeps
-    # the real label, drops the fabricated one, and strips the line from the reply.
-    assert body["citations"] == ["Limit"]
+    # The fake model appends "SOURCES: Reinsurer Cession Ratio; Bogus Field";
+    # the service keeps the real label, drops the fabricated one, and strips
+    # the line from the reply.
+    assert body["citations"] == ["Reinsurer Cession Ratio"]
     assert "SOURCES" not in body["reply"]
 
 
@@ -71,7 +72,7 @@ def test_portfolio_context_lists_treaties(client):
     assert "PORTFOLIO OVERVIEW" in ctx
     assert "Total treaties:" in ctx
     assert "Awaiting review" in ctx
-    assert "CAT-XL-2026-001" in ctx
+    assert "QS-LIFE-2027-01" in ctx
 
 
 def test_extract_sources_filters_and_strips():

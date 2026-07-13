@@ -45,8 +45,8 @@ def _brief(db: Session) -> tuple[str, int]:
     for r in a["by_currency"]:
         lines.append(
             f"- {r['currency']}: {r['count']} treaties; "
-            f"limit {r['limit']:,.0f}; aggregate limit {r['aggregate_limit']:,.0f}; "
-            f"estimated premium income {r['estimated_premium_income']:,.0f}"
+            f"layer limit {r['layer_limit_amount']:,.0f}; "
+            f"max cedant retention {r['maximum_cedant_retention_amount']:,.0f}"
         )
 
     # A capped list of individual treaties for texture.
@@ -58,10 +58,10 @@ def _brief(db: Session) -> tuple[str, int]:
         facts = [treaty.reference]
         if values.get("treaty_type"):
             facts.append(str(values["treaty_type"]).replace("_", " "))
-        if values.get("currency"):
-            facts.append(str(values["currency"]))
-        if values.get("treaty_company_identifier"):
-            facts.append(f"cedent {values['treaty_company_identifier']}")
+        if values.get("contract_currency_code"):
+            facts.append(str(values["contract_currency_code"]))
+        if values.get("cedant_name"):
+            facts.append(f"cedant {values['cedant_name']}")
         lines.append("- " + " — ".join(facts))
     if len(listed) > _MAX_TREATIES_LISTED:
         lines.append(f"…and {len(listed) - _MAX_TREATIES_LISTED} more.")

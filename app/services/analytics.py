@@ -18,11 +18,16 @@ from app.schemas.treaty_fields import field_label
 
 # Categorical fields we group by. Extend this when a classification field is
 # added (e.g. product / segment tags).
-CATEGORICAL_DIMENSIONS = ("treaty_type", "currency", "treaty_settlement_exchange_rate_type")
+CATEGORICAL_DIMENSIONS = (
+    "treaty_type", "reinsurance_basis", "contract_currency_code", "product_type", "cession_basis",
+)
+
+# The field that identifies a treaty's currency (used for per-currency totals).
+CURRENCY_FIELD = "contract_currency_code"
 
 # Numeric fields we total. Summed *within a currency* only (cross-currency sums
 # are meaningless), so these appear on the per-currency breakdown.
-NUMERIC_MEASURES = ("limit", "aggregate_limit", "estimated_premium_income")
+NUMERIC_MEASURES = ("layer_limit_amount", "maximum_cedant_retention_amount")
 
 
 def _display(value) -> str:
@@ -72,7 +77,7 @@ def portfolio_analytics(db: Session) -> dict:
         values = {dp.field_key: dp.value for dp in version.data_points}
         for dim in CATEGORICAL_DIMENSIONS:
             dim_counts[dim][_display(values.get(dim))] += 1
-        currency = _display(values.get("currency"))
+        currency = _display(values.get(CURRENCY_FIELD))
         row = by_currency[currency]
         row["count"] += 1
         for measure in NUMERIC_MEASURES:

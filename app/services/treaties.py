@@ -94,7 +94,7 @@ def create_treaty_from_extraction(
     reference_override: str | None = None,
 ) -> TreatyVersion:
     """Create a treaty and its first draft version from an LLM extraction."""
-    extracted_ref = extraction.treaty_reference.value
+    extracted_ref = extraction.treaty_code.value
     reference = reference_override or (
         str(extracted_ref) if extracted_ref else f"TREATY-{uuid.uuid4().hex[:8].upper()}"
     )
