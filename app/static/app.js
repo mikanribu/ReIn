@@ -420,8 +420,8 @@ function renderKbIngest(content) {
   content.innerHTML = `
     <div class="panel">
       <h2>Ingest treaties in bulk</h2>
-      <p class="muted small">Select multiple treaty files (PDF, DOCX or TXT). Each is parsed and added to the
-      knowledge base. Files are processed one at a time; you can watch progress below.</p>
+      <p class="muted small">Select multiple treaty files (PDF, DOCX or TXT). Each is parsed, added to the
+      knowledge base and indexed for Ask. Files are processed one at a time; you can watch progress below.</p>
       <div class="row">
         <label class="file-input">
           <input type="file" id="kb-files" accept=".pdf,.docx,.txt,.md" multiple />
@@ -431,11 +431,37 @@ function renderKbIngest(content) {
         <button id="kb-ingest-btn">Ingest all</button>
       </div>
       <div id="kb-progress" class="kb-progress"></div>
+    </div>
+    <div class="panel">
+      <h2>Uploaded documents</h2>
+      <div id="kb-docs"><div class="loader"><span class="spinner"></span><span class="loader-msg">Loading…</span></div></div>
     </div>`;
 
   const filesEl = document.getElementById("kb-files");
   const btn = document.getElementById("kb-ingest-btn");
   const progress = document.getElementById("kb-progress");
+
+  async function loadDocs() {
+    const docsEl = document.getElementById("kb-docs");
+    const docs = await api("/documents");
+    if (!docs.length) {
+      docsEl.innerHTML = '<p class="muted small">No documents uploaded yet.</p>';
+      return;
+    }
+    const rows = docs.map((d) => `<tr>
+      <td>${esc(d.filename)}</td>
+      <td>${chip(d.kind)}</td>
+      <td class="small muted">${formatDateTime(d.created_at)}</td>
+      <td class="small">${(d.text_length / 1000).toFixed(1)}k chars</td>
+      <td>${d.treaty_id
+        ? `<a href="#/treaty/${d.treaty_id}">${esc(d.treaty_reference || "open")}</a>`
+        : '<span class="muted">—</span>'}</td>
+    </tr>`).join("");
+    docsEl.innerHTML = `<table><thead><tr><th>File</th><th>Kind</th><th>Uploaded</th><th>Size</th><th>Treaty</th></tr></thead>
+      <tbody>${rows}</tbody></table>`;
+    wrapTables();
+  }
+  loadDocs();
 
   btn.onclick = async () => {
     const files = [...filesEl.files];
@@ -460,9 +486,13 @@ function renderKbIngest(content) {
         fd.append("actor", actor());
         const doc = await api("/documents", { method: "POST", body: fd });
         const version = await post("/extractions", { document_id: doc.id, actor: actor() });
+        // Auto-index for Ask (best-effort — embeddings may be unavailable).
+        let indexed = false;
+        try { await post(`/kb/index/${version.treaty_id}`, {}); indexed = true; } catch { /* skip */ }
         state.textContent = "✅";
         const found = version.data_points.filter((p) => p.value !== null).length;
-        note.innerHTML = `added — ${found} fields extracted · <a href="#/treaty/${version.treaty_id}/version/1">review</a>`;
+        note.innerHTML = `added — ${found} fields · ${indexed ? "indexed ✓" : "not indexed"} · `
+          + `<a href="#/treaty/${version.treaty_id}/version/1">review</a>`;
         ok++;
       } catch (err) {
         state.textContent = "❌";
@@ -472,6 +502,7 @@ function renderKbIngest(content) {
     btn.disabled = false;
     filesEl.disabled = false;
     toast(`Ingested ${ok}/${files.length} treaties`);
+    loadDocs();
     if (ok) {
       progress.insertAdjacentHTML("beforeend",
         `<p style="margin-top:12px"><button onclick="location.hash='#/kb/insights'">View insights</button></p>`);
@@ -505,11 +536,13 @@ function kpiTile(value, label, { sub = "", cls = "", icon = "" } = {}) {
 }
 
 async function renderHome() {
-  // Stats and treaties in parallel; stats are best-effort (never block the page).
-  const [treaties, stats] = await Promise.all([
+  // Stats, treaties and the KB index set in parallel; all best-effort.
+  const [treaties, stats, indexed] = await Promise.all([
     api("/treaties"),
     api("/stats").catch(() => null),
+    api("/kb/indexed").catch(() => ({ treaty_ids: [] })),
   ]);
+  const indexedSet = new Set(indexed.treaty_ids || []);
   const rows = treaties.map((t) => {
     const latest = t.versions[t.versions.length - 1];
     const approved = [...t.versions].reverse().find((v) => v.status === "approved");
@@ -530,6 +563,9 @@ async function renderHome() {
       <td>${esc(t.name)}</td>
       <td>v${latest ? latest.version_number : "-"} ${latest ? chip(latest.status) : ""}</td>
       <td>${approved ? "v" + approved.version_number : '<span class="muted">none</span>'}</td>
+      <td>${indexedSet.has(t.id)
+        ? '<span class="chip approved" title="Indexed for Knowledge Base search">KB ✓</span>'
+        : '<span class="chip not_found" title="Not yet indexed for Ask">—</span>'}</td>
       <td class="small muted">${formatDate(t.created_at)}</td>
     </tr>`;
   }).join("");
@@ -619,7 +655,7 @@ async function renderHome() {
              workflow in action.</p>
              <button id="btn-sample-empty">Try a sample treaty</button>
            </div>`
-        : `<table><thead><tr><th>Reference</th><th>Name</th><th>Latest version</th><th>In force</th><th>Created</th></tr></thead>
+        : `<table><thead><tr><th>Reference</th><th>Name</th><th>Latest version</th><th>In force</th><th>KB</th><th>Created</th></tr></thead>
            <tbody id="portfolio-body">${rows}</tbody></table>`}
     </div>`;
 

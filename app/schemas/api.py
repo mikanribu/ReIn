@@ -17,6 +17,9 @@ class DocumentOut(BaseModel):
     uploaded_by: str
     created_at: datetime
     text_length: int
+    # Populated in list views: the treaty this document produced/amended, if any.
+    treaty_id: Optional[str] = None
+    treaty_reference: Optional[str] = None
 
     model_config = {"from_attributes": True}
 

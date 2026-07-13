@@ -72,6 +72,36 @@ def reindex(db: Session, embedder: Embedder) -> dict:
     }
 
 
+def index_treaty(db: Session, embedder: Embedder, treaty_id: str) -> bool:
+    """(Re)index a single treaty so it's immediately searchable in Ask.
+    Replaces any existing chunks for that treaty. Returns False if not found."""
+    treaty = db.get(Treaty, treaty_id)
+    if treaty is None or not treaty.versions:
+        return False
+    version = max(treaty.versions, key=lambda v: v.version_number)
+    db.execute(delete(TreatyChunk).where(TreatyChunk.treaty_id == treaty_id))
+    content = _chunk_text(treaty, version)
+    vector = embedder.embed_documents([content])[0]
+    db.add(TreatyChunk(
+        treaty_id=treaty.id,
+        treaty_reference=treaty.reference,
+        treaty_name=treaty.name,
+        content=content,
+        embedding=list(vector),
+        embedding_model=embedder.model_id,
+    ))
+    db.commit()
+    return True
+
+
+def indexed_treaty_ids(db: Session, model_id: str) -> list[str]:
+    """Treaty ids that have a chunk for the given embedding model."""
+    rows = db.execute(
+        select(TreatyChunk.treaty_id).where(TreatyChunk.embedding_model == model_id)
+    ).scalars().all()
+    return sorted(set(rows))
+
+
 def _cosine(a: list[float], b: list[float]) -> float:
     dot = sum(x * y for x, y in zip(a, b))
     na = math.sqrt(sum(x * x for x in a))

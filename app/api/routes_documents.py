@@ -4,11 +4,12 @@ from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import Response
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.database import get_db
-from app.models import Document
+from app.models import Document, TreatyVersion
 from app.schemas.api import DocumentOut
 from app.services import audit, documents
 
@@ -36,6 +37,29 @@ def _to_out(doc: Document) -> DocumentOut:
         created_at=doc.created_at,
         text_length=len(doc.content_text),
     )
+
+
+@router.get("", response_model=list[DocumentOut])
+def list_documents(db: Session = Depends(get_db)) -> list[DocumentOut]:
+    """All uploaded documents (newest first), each linked to the treaty it
+    produced or amended, if any."""
+    docs = db.execute(select(Document).order_by(Document.created_at.desc())).scalars().all()
+    # Map document -> (treaty_id, reference) via the version that used it.
+    versions = db.execute(
+        select(TreatyVersion).where(TreatyVersion.source_document_id.is_not(None))
+    ).scalars().all()
+    link: dict[str, TreatyVersion] = {}
+    for v in versions:
+        link.setdefault(v.source_document_id, v)
+    out = []
+    for d in docs:
+        item = _to_out(d)
+        v = link.get(d.id)
+        if v is not None:
+            item.treaty_id = v.treaty_id
+            item.treaty_reference = v.treaty.reference
+        out.append(item)
+    return out
 
 
 @router.post("", response_model=DocumentOut, status_code=201)

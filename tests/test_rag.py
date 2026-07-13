@@ -42,6 +42,32 @@ def test_ask_rejects_empty_question(client):
     assert r.status_code == 422
 
 
+def test_index_single_treaty_and_indexed_list(client):
+    _seed(client)
+    tid = client.get("/treaties").json()[0]["id"]
+    r = client.post(f"/kb/index/{tid}")
+    assert r.status_code == 200, r.text
+    assert r.json()["indexed"] is True
+
+    indexed = client.get("/kb/indexed").json()
+    assert tid in indexed["treaty_ids"]
+    assert indexed["embedding_model"] == "fake:test"
+
+
+def test_index_unknown_treaty_404(client):
+    r = client.post("/kb/index/does-not-exist")
+    assert r.status_code == 404
+
+
+def test_documents_list_links_to_treaty(client):
+    _seed(client)
+    docs = client.get("/documents").json()
+    assert len(docs) >= 1
+    treaty_docs = [d for d in docs if d["kind"] == "treaty" and d["treaty_id"]]
+    assert treaty_docs, "a treaty document should link to its treaty"
+    assert treaty_docs[0]["treaty_reference"] == "QS-LIFE-2027-01"
+
+
 def test_retrieve_ranks_relevant_chunk_first():
     """Cosine retrieval with the fake embedder ranks the more relevant chunk
     higher — a real ranking check independent of the API."""

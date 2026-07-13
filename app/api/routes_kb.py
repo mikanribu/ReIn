@@ -1,7 +1,7 @@
 """Knowledge Base RAG endpoints: build the index and ask questions."""
 import time
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from langchain_core.language_models.chat_models import BaseChatModel
 from sqlalchemy.orm import Session
 
@@ -50,6 +50,32 @@ def reindex(
             duration_s=time.perf_counter() - t0,
         )
     return KbReindexResult(indexed_chunks=stats["indexed_chunks"])
+
+
+@router.get("/indexed")
+def indexed(
+    db: Session = Depends(get_db),
+    embedder: Embedder = Depends(get_embeddings),
+) -> dict:
+    """Treaty ids currently in the semantic index for this embedding model."""
+    return {
+        "embedding_model": embedder.model_id,
+        "treaty_ids": rag_service.indexed_treaty_ids(db, embedder.model_id),
+    }
+
+
+@router.post("/index/{treaty_id}")
+def index_one(
+    treaty_id: str,
+    db: Session = Depends(get_db),
+    embedder: Embedder = Depends(get_embeddings),
+) -> dict:
+    """(Re)index a single treaty (used to auto-index on ingest)."""
+    with translate_llm_errors("index the treaty"):
+        ok = rag_service.index_treaty(db, embedder, treaty_id)
+    if not ok:
+        raise HTTPException(404, f"Treaty {treaty_id} not found or has no version")
+    return {"indexed": True}
 
 
 @router.post("/ask", response_model=KbAnswer)
