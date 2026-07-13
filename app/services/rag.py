@@ -44,13 +44,14 @@ def _chunk_text(treaty: Treaty, version: TreatyVersion) -> str:
     return "\n".join(lines)
 
 
-def reindex(db: Session, embedder: Embedder) -> int:
-    """Rebuild the whole semantic index. Returns the number of chunks indexed."""
+def reindex(db: Session, embedder: Embedder) -> dict:
+    """Rebuild the whole semantic index. Returns build stats
+    (indexed_chunks, chars, dim) for logging."""
     db.execute(delete(TreatyChunk))
     pairs = list(analytics_service._latest_versions(db))
     if not pairs:
         db.commit()
-        return 0
+        return {"indexed_chunks": 0, "chars": 0, "dim": 0}
 
     contents = [_chunk_text(t, v) for t, v in pairs]
     vectors = embedder.embed_documents(contents)
@@ -64,7 +65,11 @@ def reindex(db: Session, embedder: Embedder) -> int:
             embedding_model=embedder.model_id,
         ))
     db.commit()
-    return len(contents)
+    return {
+        "indexed_chunks": len(contents),
+        "chars": sum(len(c) for c in contents),
+        "dim": len(vectors[0]) if vectors else 0,
+    }
 
 
 def _cosine(a: list[float], b: list[float]) -> float:

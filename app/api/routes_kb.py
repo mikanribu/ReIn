@@ -1,8 +1,12 @@
 """Knowledge Base RAG endpoints: build the index and ask questions."""
+import time
+
 from fastapi import APIRouter, Depends
 from langchain_core.language_models.chat_models import BaseChatModel
 from sqlalchemy.orm import Session
 
+from app import observability
+from app.config import get_settings
 from app.database import get_db
 from app.schemas.api import (
     KbAnswer,
@@ -34,9 +38,18 @@ def reindex(
     embedder: Embedder = Depends(get_embeddings),
 ) -> KbReindexResult:
     """(Re)build the semantic index over every treaty."""
-    with translate_llm_errors("build the semantic index"):
-        count = rag_service.reindex(db, embedder)
-    return KbReindexResult(indexed_chunks=count)
+    with translate_llm_errors("build the semantic index"), observability.run("kb.reindex"):
+        t0 = time.perf_counter()
+        stats = rag_service.reindex(db, embedder)
+        observability.log_reindex(
+            provider=get_settings().embeddings_provider,
+            model_id=embedder.model_id,
+            dim=stats["dim"],
+            chunks=stats["indexed_chunks"],
+            chars=stats["chars"],
+            duration_s=time.perf_counter() - t0,
+        )
+    return KbReindexResult(indexed_chunks=stats["indexed_chunks"])
 
 
 @router.post("/ask", response_model=KbAnswer)

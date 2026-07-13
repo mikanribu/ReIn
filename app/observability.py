@@ -38,9 +38,35 @@ def run(name: str):
     if not settings.mlflow_enabled:
         yield
         return
-    init_mlflow() 
+    init_mlflow()
     import mlflow
-    with mlflow.start_run(run_name=name) as run:
-        print(f"MLflow run started: {run.info.run_id}")
-        yield run
+    with mlflow.start_run(run_name=name) as active:
+        yield active
+
+
+def log_reindex(*, provider, model_id, dim, chunks, chars, duration_s) -> None:
+    """Log embedding-index build metrics (no content, just counts/latency).
+
+    Lets you compare embedding models on your own corpus. No-op when MLflow is
+    disabled or not installed.
+    """
+    settings = get_settings()
+    if not settings.mlflow_enabled:
+        return
+    try:
+        import mlflow
+
+        mlflow.log_params({
+            "embeddings_provider": provider,
+            "embeddings_model": model_id,
+            "embedding_dim": dim,
+        })
+        mlflow.log_metrics({
+            "indexed_chunks": chunks,
+            "chars_embedded": chars,
+            "duration_s": round(duration_s, 2),
+            "chunks_per_s": round(chunks / duration_s, 2) if duration_s else 0.0,
+        })
+    except Exception:
+        logger.exception("MLflow log_reindex failed; continuing")
 
