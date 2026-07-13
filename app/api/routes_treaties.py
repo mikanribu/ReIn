@@ -1,9 +1,12 @@
 """Treaty lifecycle endpoints: extract, review, approve, amend, audit."""
+import time
+
 from fastapi import APIRouter, Depends, HTTPException
 from langchain_core.language_models.chat_models import BaseChatModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.config import get_settings
 from app.database import get_db
 from app.models import (
     AuditLog,
@@ -103,11 +106,24 @@ def run_extraction(
     doc = _get_document(db, payload.document_id, "treaty")
 
     with observability.run(f"extract:{doc.filename}"):
-
+        t0 = time.perf_counter()
         with translate_llm_errors("extract the treaty"):
             extraction = extraction_service.extract_treaty(llm, doc.content_text)
         version = treaty_service.create_treaty_from_extraction(
             db, doc, extraction, actor=payload.actor, reference_override=payload.treaty_reference
+        )
+        s = get_settings()
+        model = {
+            "anthropic": s.anthropic_model,
+            "ollama": s.ollama_model,
+            "azure_openai": s.azure_openai_deployment,
+        }.get(s.extraction_llm_provider, s.extraction_llm_provider)
+        observability.log_extraction(
+            filename=doc.filename,
+            provider=s.extraction_llm_provider,
+            model=model,
+            extraction=extraction,
+            duration_s=time.perf_counter() - t0,
         )
         return _version_detail(version)
 

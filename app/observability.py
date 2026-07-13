@@ -44,6 +44,40 @@ def run(name: str):
         yield active
 
 
+def log_extraction(*, filename, provider, model, extraction, duration_s=None) -> None:
+    """Log extraction quality metrics for one treaty (no document text logged).
+
+    Records field coverage and confidence so extractions are comparable across
+    prompts/models. No-op when MLflow is disabled or absent.
+    """
+    settings = get_settings()
+    if not settings.mlflow_enabled:
+        return
+    try:
+        import mlflow
+
+        fields = {k: getattr(extraction, k) for k in type(extraction).model_fields}
+        found = [v for v in fields.values() if getattr(v, "value", None) not in (None, "", [])]
+        confs = [v.confidence for v in found if getattr(v, "confidence", None) is not None]
+        mlflow.log_params({
+            "extract_provider": provider,
+            "extract_model": model,
+            "filename": filename,
+        })
+        metrics = {
+            "fields_total": len(fields),
+            "fields_found": len(found),
+            "coverage": len(found) / len(fields) if fields else 0.0,
+            "mean_confidence": sum(confs) / len(confs) if confs else 0.0,
+            "low_confidence_fields": sum(1 for c in confs if c < 0.7),
+        }
+        if duration_s is not None:
+            metrics["duration_s"] = round(duration_s, 2)
+        mlflow.log_metrics(metrics)
+    except Exception:
+        logger.exception("MLflow log_extraction failed; continuing")
+
+
 def log_reindex(*, provider, model_id, dim, chunks, chars, duration_s) -> None:
     """Log embedding-index build metrics (no content, just counts/latency).
 

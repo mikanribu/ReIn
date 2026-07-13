@@ -71,10 +71,22 @@ def index_one(
     embedder: Embedder = Depends(get_embeddings),
 ) -> dict:
     """(Re)index a single treaty (used to auto-index on ingest)."""
+    t0 = time.perf_counter()
     with translate_llm_errors("index the treaty"):
-        ok = rag_service.index_treaty(db, embedder, treaty_id)
-    if not ok:
+        stats = rag_service.index_treaty(db, embedder, treaty_id)
+    if stats is None:
         raise HTTPException(404, f"Treaty {treaty_id} not found or has no version")
+    # Log the per-treaty index build (separate run so bulk-ingest indexing is
+    # visible, not just full reindex). No content is logged.
+    with observability.run("kb.index"):
+        observability.log_reindex(
+            provider=get_settings().embeddings_provider,
+            model_id=embedder.model_id,
+            dim=stats["dim"],
+            chunks=stats["indexed_chunks"],
+            chars=stats["chars"],
+            duration_s=time.perf_counter() - t0,
+        )
     return {"indexed": True}
 
 

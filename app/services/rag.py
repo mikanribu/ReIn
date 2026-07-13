@@ -72,12 +72,13 @@ def reindex(db: Session, embedder: Embedder) -> dict:
     }
 
 
-def index_treaty(db: Session, embedder: Embedder, treaty_id: str) -> bool:
+def index_treaty(db: Session, embedder: Embedder, treaty_id: str) -> dict | None:
     """(Re)index a single treaty so it's immediately searchable in Ask.
-    Replaces any existing chunks for that treaty. Returns False if not found."""
+    Replaces any existing chunks for that treaty. Returns build stats
+    (indexed_chunks, chars, dim), or None if the treaty isn't found."""
     treaty = db.get(Treaty, treaty_id)
     if treaty is None or not treaty.versions:
-        return False
+        return None
     version = max(treaty.versions, key=lambda v: v.version_number)
     db.execute(delete(TreatyChunk).where(TreatyChunk.treaty_id == treaty_id))
     content = _chunk_text(treaty, version)
@@ -91,7 +92,7 @@ def index_treaty(db: Session, embedder: Embedder, treaty_id: str) -> bool:
         embedding_model=embedder.model_id,
     ))
     db.commit()
-    return True
+    return {"indexed_chunks": 1, "chars": len(content), "dim": len(vector)}
 
 
 def indexed_treaty_ids(db: Session, model_id: str) -> list[str]:
