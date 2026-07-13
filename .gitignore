@@ -8,4 +8,8 @@ venv/
 push.log
 mlruns/
 mlflow.db
-mlartifacts/ # where SQLite-backend runs store artifacts
+# SQLite-backend runs store artifacts here
+mlartifacts/
+# where Treaty Samples are stored
+samples/treaty_samples/*.pdf
+samples/fields_list.md
