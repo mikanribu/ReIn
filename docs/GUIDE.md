@@ -51,6 +51,17 @@ They are completely separate. The browser and the server only ever exchange
 **text** (JSON) over HTTP. That separation is the single most important idea in
 modern web apps — internalize it and everything else falls into place.
 
+The app has since grown **two top-level areas** (a menu switches between them):
+
+- **Treaty Review** — the core loop above: upload → extract → review → approve →
+  amend, per treaty, human-in-the-loop and audited.
+- **Knowledge Base** — works across the *whole book* of treaties: portfolio
+  **analytics**, an AI **summary**, and semantic **Ask** (Q&A with citations).
+
+Plus a floating **chat assistant** that can answer about the treaty you're
+looking at, or the portfolio in general. Everything below still centres on the
+review loop — it's the heart — but §8.7–8.9 cover these newer pieces.
+
 ---
 
 ## 2. The two halves and how they talk (REST/JSON)
@@ -74,11 +85,16 @@ The backend exposes URLs like:
 | You want to… | Method + URL |
 |---|---|
 | List treaties | `GET /treaties` |
-| Upload a document | `POST /documents` |
+| Upload a document | `POST /documents` · list them `GET /documents` |
 | Run extraction | `POST /extractions` |
-| Fix one data point | `PATCH /treaties/{id}/versions/1/data-points/limit` |
+| Fix one data point | `PATCH /treaties/{id}/versions/1/data-points/reinsurer_cession_ratio` |
 | Approve a version | `POST /treaties/{id}/versions/1/approve` |
 | Dashboard numbers | `GET /stats` |
+| The field catalogue (+ metadata) | `GET /catalog` · `GET /catalog/fields` |
+| Portfolio analytics / summary | `GET /analytics/portfolio` · `POST /analytics/summary` |
+| KB index: build / status / which | `POST /kb/reindex` · `GET /kb/status` · `GET /kb/indexed` |
+| Ask the corpus (RAG) | `POST /kb/ask` |
+| Chat assistant | `POST /chat` |
 
 Each returns JSON. This style — nouns as URLs, verbs as HTTP methods — is
 called **REST**. The frontend is just a program that calls these URLs and
@@ -134,39 +150,51 @@ rules, models handle the data."*
 ```
 ReIn/
 ├── app/                      ← the backend application (a Python package)
-│   ├── main.py               ← creates the FastAPI app, wires routes, serves the UI
-│   ├── config.py             ← all settings (DB URL, which LLM, API keys)
+│   ├── main.py               ← creates the FastAPI app, wires routers, serves the UI, inits MLflow
+│   ├── config.py             ← all settings (DB URL, chat/extraction/embeddings providers, keys, MLflow)
 │   ├── database.py           ← DB engine + "give me a session" helper
 │   ├── models.py             ← the database tables, as Python classes (ORM)
+│   ├── observability.py      ← optional MLflow tracing/metrics (no-op when disabled)
 │   │
 │   ├── api/                  ← the HTTP layer (URL handlers = "routes")
-│   │   ├── routes_documents.py   ← upload / fetch / view a document
-│   │   └── routes_treaties.py    ← extract, review, approve, amend, stats, audit
+│   │   ├── routes_documents.py   ← upload / list / fetch / view documents
+│   │   ├── routes_treaties.py    ← extract, review, approve, amend, catalogue, stats, audit
+│   │   ├── routes_analytics.py   ← portfolio analytics + AI summary (Knowledge Base)
+│   │   ├── routes_kb.py          ← semantic index (build/status/indexed) + RAG "Ask"
+│   │   └── routes_chat.py        ← the treaty-aware chat assistant
 │   │
 │   ├── services/             ← the business logic (no HTTP here)
 │   │   ├── documents.py          ← turn an uploaded file into plain text
-│   │   ├── llm.py                ← build the AI model (Anthropic/Ollama/Azure)
+│   │   ├── llm.py                ← build the chat & extraction models (Anthropic/Ollama/Azure)
+│   │   ├── embeddings.py         ← build the embeddings model (Ollama/Azure) for search
 │   │   ├── extraction.py         ← ask the AI to fill the data-point schema
 │   │   ├── treaties.py           ← versioning, review, amendments (the core)
 │   │   ├── audit.py              ← the hash-chained audit trail
+│   │   ├── stats.py              ← dashboard KPI counts
+│   │   ├── analytics.py          ← deterministic portfolio breakdowns (never the LLM)
+│   │   ├── summary.py            ← LLM portfolio summary, grounded in the analytics
+│   │   ├── chat.py               ← the assistant (grounded per-treaty / portfolio; no tools)
+│   │   ├── rag.py                ← chunk, embed, retrieve, answer with citations
 │   │   └── errors.py             ← turn AI/network failures into clean HTTP errors
 │   │
 │   ├── schemas/              ← data *shapes* (Pydantic models), not tables
-│   │   ├── treaty_fields.py      ← THE data-point catalog (what to extract)
+│   │   ├── treaty_fields.py      ← THE data-point catalogue (metadata-driven)
 │   │   └── api.py                ← request/response shapes for the API
 │   │
 │   └── static/               ← the frontend (served as-is to the browser)
-│       ├── index.html            ← the single HTML page
+│       ├── index.html            ← the single HTML page (header nav + view)
 │       ├── style.css             ← all the styling
-│       └── app.js                ← the entire UI logic (routing + rendering)
+│       ├── app.js                ← the entire UI logic (routing + rendering + chat widget)
+│       └── img/                  ← logo assets
 │
-├── tests/                    ← automated tests (pytest)
-│   ├── conftest.py               ← shared setup + a FAKE AI so tests need no key
+├── tests/                    ← automated tests (pytest); a FAKE AI + a FAKE embedder, no keys
+│   ├── conftest.py               ← shared setup + the fakes + isolated per-module DB
 │   └── test_*.py                 ← one file per area
 │
-├── scripts/                  ← standalone diagnostics (not part of the server)
+├── scripts/                  ← reset_db.py (wipe & recreate all tables) + diagnostics
 ├── samples/                  ← example treaty + amendment documents
 ├── supabase/schema.sql       ← the same tables, as SQL, for Postgres/Supabase
+├── docs/GUIDE.md             ← this file
 ├── requirements.txt          ← Python dependencies
 ├── .env.example              ← template for your local secrets/config
 └── README.md                 ← quickstart + API summary
@@ -184,37 +212,63 @@ package" so `from app.services import treaties` works.
   `.env`. One place for every knob.
 - `database.py` — creates the SQLAlchemy **engine** (the DB connection factory)
   and `get_db()`, which hands each request its own **session** (a unit of work).
-- `models.py` — five tables as classes: `Document`, `Treaty`, `TreatyVersion`,
-  `DataPoint`, `AuditLog`. Also the status/origin constants.
+- `models.py` — six tables as classes: `Document`, `Treaty`, `TreatyVersion`,
+  `DataPoint`, `TreatyChunk` (the semantic index), `AuditLog`. Also the
+  status/origin constants.
+- `observability.py` — optional MLflow helpers: `init_mlflow()`, a `run()`
+  context manager, and `log_extraction()` / `log_reindex()`. Everything is a
+  no-op unless `MLFLOW_ENABLED=true`, and MLflow is imported lazily so the app
+  runs without it installed.
 
 **API layer**
-- `routes_documents.py` — `POST /documents` (upload), `GET /documents/{id}`,
-  `/text`, `/file` (view the original).
-- `routes_treaties.py` — everything else: `/catalog`, `/stats`, `/extractions`,
-  the treaty/version reads, `PATCH` a data point, approve/reject, the two
-  amendment endpoints, `/current`, and the audit endpoints.
+- `routes_documents.py` — `POST /documents` (upload), `GET /documents` (list),
+  `/{id}`, `/text`, `/file` (view the original), `POST /documents/sample`.
+- `routes_treaties.py` — the core loop: `/catalog`, `/catalog/fields`, `/stats`,
+  `/extractions`, the treaty/version reads, `PATCH` a data point, approve/reject,
+  the two amendment endpoints, `/current`, and the audit endpoints.
+- `routes_analytics.py` — `GET /analytics/portfolio` (deterministic breakdowns)
+  and `POST /analytics/summary` (the grounded AI summary).
+- `routes_kb.py` — the semantic index: `POST /kb/reindex`, `GET /kb/status`,
+  `GET /kb/indexed`, `POST /kb/index/{id}`, and `POST /kb/ask` (RAG).
+- `routes_chat.py` — `POST /chat`, the treaty-aware assistant.
 
 **Service layer**
 - `documents.py` — `extract_text()` (PDF via pypdf, DOCX via docx2txt, TXT
   directly) and `sha256_hex()`.
-- `llm.py` — `get_chat_model()` returns a LangChain chat model for whichever
-  provider `LLM_PROVIDER` selects. Lazy imports so you only install what you use.
+- `llm.py` — `get_chat_model()` and `get_extraction_model()` return LangChain
+  chat models for whichever provider each is set to (chat and extraction can use
+  *different* providers). Lazy imports so you only install what you use.
+- `embeddings.py` — `get_embeddings()` returns an `Embedder` (Ollama or Azure),
+  tagged with a `model_id` so vectors from different models never mix.
 - `extraction.py` — two functions that send the document text to the model and
   get back a validated Pydantic object (treaty extraction / amendment changes).
 - `treaties.py` — the heart: create a treaty from an extraction, edit/approve/
   reject a draft, create amendment versions, diff versions. All the rules live
   here.
+- `stats.py` — `compute_stats()`: the home-dashboard KPI counts (shared by the
+  `/stats` route and the chat assistant's portfolio overview).
+- `analytics.py` — `portfolio_analytics()`: counts per category + totals per
+  currency, computed **in SQL/Python, never by the LLM** (see §8.7).
+- `summary.py` — `summarize_portfolio()`: an LLM executive summary *fed the exact
+  analytics numbers* so it can't invent figures.
+- `chat.py` — `answer()`: the assistant. No tools are bound, so it has no web
+  access; it's grounded in one treaty or the portfolio overview (see §8.8).
+- `rag.py` — the Ask pipeline: `_chunk_text` → `reindex`/`index_treaty` (embed &
+  store) → `retrieve` (cosine) → `answer_question` (grounded, with citations).
 - `audit.py` — `record()` appends a hash-chained entry; `verify_chain()`
   re-walks it to detect tampering.
 - `errors.py` — a context manager that maps AI/network exceptions to friendly
   HTTP errors instead of raw 500s.
 
 **Schemas**
-- `treaty_fields.py` — `TreatyExtraction`: one Pydantic class listing every data
-  point to extract, each wrapped in `ExtractedField` (value + source quote +
-  location + confidence + rationale). Change this file and the whole app follows.
+- `treaty_fields.py` — the **metadata-driven catalogue**: `_FIELDS` lists every
+  data point with its category, requirement (mandatory/optional) and description;
+  the `TreatyExtraction` Pydantic model is generated from it (`create_model`), and
+  `field_metadata()` exposes the metadata. Change `_FIELDS` and the whole app
+  follows (see §8.1).
 - `api.py` — the request bodies and response shapes (`VersionDetail`,
-  `StatsOut`, etc.). These define what the API accepts and returns.
+  `StatsOut`, `PortfolioAnalytics`, `KbAnswer`, …). These define what the API
+  accepts and returns.
 
 **Frontend**
 - `index.html` — a nearly empty shell with one `<div id="view">`.
@@ -350,12 +404,13 @@ class Treaty(Base):
   fetches the related rows.
 - `ForeignKey("treaties.id")` on `TreatyVersion` links a version to its treaty.
 
-The five tables and how they relate:
+The six tables and how they relate:
 ```
 Document        (an uploaded file: text + original bytes + sha256)
 Treaty  1───*  TreatyVersion  1───*  DataPoint
-                    │                    (one row per field per version, with provenance)
-                    └── source_document_id → Document
+   │                │                    (one row per field per version, with provenance)
+   │                └── source_document_id → Document
+   └── 1───*  TreatyChunk   (the semantic index: one text chunk + embedding per treaty)
 AuditLog        (append-only log; not linked by FK, keyed by treaty_id)
 ```
 
@@ -479,6 +534,7 @@ async function route() {
   const hash = location.hash || "#/";
   if (matches "#/treaty/{id}/version/{n}")  await renderVersion(id, n);
   else if (matches "#/treaty/{id}")         await renderTreaty(id);
+  else if (matches "#/kb/{tab}")            await renderKnowledgeBase(tab);
   else                                      await renderHome();
 }
 window.addEventListener("hashchange", route);  // re-run when the hash changes
@@ -553,18 +609,27 @@ different client (a script, a mobile app) against the same API.
 
 These are the "why," and they make the best talking points.
 
-### 8.1 One schema drives extraction, validation, storage, and the UI
+### 8.1 One catalogue drives extraction, validation, storage, and the UI
 
-`TreatyExtraction` in `schemas/treaty_fields.py` is the **single source of
-truth** for "what is a treaty's data." From that one class:
-- LangChain derives the JSON schema it forces the AI to fill,
-- the `/catalog` endpoint lists the fields,
+`schemas/treaty_fields.py` is the **single source of truth** for "what is a
+treaty's data." It's **metadata-driven**: a list `_FIELDS` gives each data point
+a `(key, requirement, category, description)`, where *requirement* is
+Mandatory/Optional and *category* is one of Treaty / Product & Benefit /
+Cession & Layers. From that one list:
+- the `TreatyExtraction` Pydantic model is **generated** (`create_model`), which
+  is the JSON schema LangChain forces the AI to fill,
+- `/catalog` lists field → description; `/catalog/fields` returns the full
+  metadata (category, mandatory, …),
 - manual edits are validated against the field keys,
 - each field becomes a `DataPoint` row,
 - the UI renders a row per field.
 
-Add a field to that class and the entire pipeline picks it up. That's the
-payoff of schema-driven design — say this in a presentation and people nod.
+Add an entry to `_FIELDS` and the entire pipeline picks it up. That's the payoff
+of schema-driven design — say this in a presentation and people nod.
+
+> The catalogue is currently **flat** (single product/benefit, layers 1–3 as
+> columns). Modelling multiple products/benefits/layers per treaty as real
+> one-to-many tables is a planned enhancement — see `docs/BACKLOG.md`.
 
 ### 8.2 Transparency: never store a bare value
 
@@ -599,8 +664,60 @@ output."
 ### 8.6 Config over hard-coding
 
 `config.py` reads everything from environment/`.env`: the database URL (so the
-same code runs on SQLite locally and Supabase Postgres in production), the LLM
-provider and keys, token limits. No secrets in code; no code changes to deploy.
+same code runs on SQLite locally and Supabase Postgres in production), the
+chat/extraction/embeddings providers and keys, token limits, MLflow settings.
+No secrets in code; no code changes to deploy.
+
+### 8.7 The Knowledge Base — deterministic analytics vs. RAG
+
+The KB works across the *whole book* of treaties (it's the same corpus as Treaty
+Review — every treaty is in it automatically). It answers **two very different
+kinds of question with two different mechanisms**, and keeping them separate is
+the most important design decision here:
+
+- **Quantitative / aggregate** ("how many treaties per type?", "total limit by
+  currency?") → answered by **plain aggregation over the extracted fields**
+  (`services/analytics.py`), *never* by the LLM. LLMs can't be trusted to count.
+  The AI **summary** (`services/summary.py`) is even *fed* these computed numbers
+  and told to use only them, so the prose can't invent figures.
+- **Qualitative / semantic** ("which treaties are quota share?") → answered by
+  **RAG** (`services/rag.py`): each treaty is rendered to a text chunk, embedded
+  (`services/embeddings.py`), and stored in the `treaty_chunks` table; at question
+  time the question is embedded, the closest chunks are retrieved by cosine
+  similarity, and the chat model answers **using only those chunks**, citing the
+  source treaties.
+
+The vector store is JSON-in-a-column with in-Python cosine (works on SQLite and
+Postgres; pgvector is the production swap). Each chunk is tagged with the
+embedding `model_id`, so switching embedding models just means reindexing —
+vectors from different models never mix. The index is built on demand
+(`POST /kb/reindex`) and per-treaty on bulk ingest (`POST /kb/index/{id}`); the
+home list shows a **KB** flag for which treaties are searchable.
+
+### 8.8 The chat assistant — grounded, and deliberately tool-free
+
+`services/chat.py` powers the floating assistant. Two guarantees:
+
+- **No web access, by construction.** The model is called with `llm.invoke(...)`
+  and **no tools bound**, so it physically cannot browse or take actions — it can
+  only reason over the conversation and the context we hand it.
+- **Grounded.** On a treaty page it's given that treaty's data; elsewhere it's
+  given the portfolio overview (`services/stats.py`). Grounded answers cite the
+  treaty fields they used, and those citations are **validated against the real
+  field labels** so a hallucinated one is dropped.
+
+The history is capped (recent turns + per-message length) so a long or pasted-in
+conversation can't blow up cost/latency.
+
+### 8.9 Observability (optional) — MLflow
+
+`app/observability.py` adds MLflow tracing/metrics, entirely **opt-in**
+(`MLFLOW_ENABLED`, default off) and imported lazily so the app runs without
+MLflow installed. When on: `mlflow.langchain.autolog()` traces every LLM call;
+extraction runs log field coverage/confidence; index builds log chunks/latency
+by embedding model. It's *model/quality* observability — distinct from the
+hash-chained audit trail (§8.4), which is the compliance record. See
+`docs/BACKLOG.md` for planned refinements (batch runs, retrieval-quality eval).
 
 ---
 
@@ -646,8 +763,21 @@ on — that's the secret to not getting overwhelmed.
 9. **Tests.** Add `pytest` with a **fake** chat model (see `tests/conftest.py`)
    so the whole flow runs without an API key. Test the rules, not the AI.
 
+10. **The Knowledge Base.** Now that you have a corpus, add a second area:
+    - *Analytics* — a service that aggregates the stored fields (counts per
+      category, totals per currency) + a charts page. Deterministic; no LLM.
+    - *Summary* — feed those numbers to the chat model for a narrative.
+    - *Ask (RAG)* — add an embeddings provider + a `treaty_chunks` table; embed
+      each treaty, retrieve by cosine, answer with citations. (This is the
+      heaviest piece — do it last, and keep the embedder pluggable.)
+
+11. **The assistant & observability.** A tool-free chat endpoint grounded in the
+    current treaty/portfolio, and optional MLflow tracing gated behind a flag.
+    Both are additive and shouldn't touch the core loop.
+
 The order matters: **backend first, always runnable, UI last.** Never build a
-screen for an endpoint that doesn't exist yet.
+screen for an endpoint that doesn't exist yet. And keep the two "answer" paths
+separate — **aggregates from data, prose from the LLM** (§8.7).
 
 ---
 
