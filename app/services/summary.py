@@ -62,6 +62,10 @@ def _brief(db: Session) -> tuple[str, int]:
             facts.append(str(values["contract_currency_code"]))
         if values.get("cedant_name"):
             facts.append(f"cedant {values['cedant_name']}")
+        if version.products:
+            facts.append(f"{len(version.products)} product(s)")
+        if version.cession_rules:
+            facts.append(f"{len(version.cession_rules)} layer(s)")
         lines.append("- " + " — ".join(facts))
     if len(listed) > _MAX_TREATIES_LISTED:
         lines.append(f"…and {len(listed) - _MAX_TREATIES_LISTED} more.")

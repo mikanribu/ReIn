@@ -84,12 +84,8 @@ _FIELDS: list[tuple[str, str, str, str]] = [
      "Policy inception cohort end date for the cession rule (ISO date)."),
     ("cession_basis", "Mandatory", CAT_CESSION,
      "quota_share, surplus, layered_quota_share, excess, modified_coinsurance, etc."),
-    ("layer_number", "Mandatory", CAT_CESSION, "Layer identifier (number), e.g. 1, 2, 3."),
+    ("layer_number", "Mandatory", CAT_CESSION, "Layer identifier (number); one cession-rule row per layer, e.g. 1, 2, 3."),
     ("layer_name", "Optional", CAT_CESSION, "Descriptive layer name, e.g. 'Base quota share layer'."),
-    ("layer_1_ceding_ratio", "Mandatory where applicable", CAT_CESSION,
-     "Reinsurer ceding percentage for layer 1 (number, %)."),
-    ("layer_2_ceding_ratio", "Optional", CAT_CESSION, "Reinsurer ceding percentage for layer 2, if present (number, %)."),
-    ("layer_3_ceding_ratio", "Optional", CAT_CESSION, "Reinsurer ceding percentage for layer 3, if present (number, %)."),
     ("cedant_retention_ratio", "Mandatory", CAT_CESSION, "Percentage retained by the cedant under the rule/layer (number, %)."),
     ("reinsurer_cession_ratio", "Mandatory", CAT_CESSION, "Percentage ceded to the reinsurer under the rule/layer (number, %)."),
     ("layer_attachment_amount", "Mandatory for layered/surplus", CAT_CESSION, "Amount at which the layer begins."),
@@ -136,14 +132,66 @@ class ExtractedField(BaseModel):
     )
 
 
-# Build the extraction model from the catalogue so the two never diverge.
+# ---------------------------------------------------------------------------
+# Split the catalogue into the flat, treaty-level fields (stored as DataPoints)
+# and the child collections (products / benefits / cession rules), which are
+# stored as one-to-many rows per treaty version.
+# ---------------------------------------------------------------------------
+_TREATY_FIELDS = [f for f in _FIELDS if f[2] == CAT_TREATY]
+_PRODUCT_FIELDS = [f for f in _FIELDS if f[2] == CAT_PRODUCT and f[0].startswith("product_")]
+_BENEFIT_FIELDS = [f for f in _FIELDS if f[2] == CAT_PRODUCT and f[0].startswith("benefit_")]
+_CESSION_FIELDS = [f for f in _FIELDS if f[2] == CAT_CESSION]
+
+# Field keys that need a non-string Python type in the child models.
+_INT_KEYS = {"layer_number", "priority_order"}
+_FLOAT_KEYS = {
+    "cedant_retention_ratio", "reinsurer_cession_ratio", "layer_attachment_amount",
+    "layer_limit_amount", "layer_detachment_amount", "maximum_cedant_retention_amount",
+}
+
+
+def _child_type(key: str):
+    if key in _INT_KEYS:
+        return Optional[int]
+    if key in _FLOAT_KEYS:
+        return Optional[float]
+    return Optional[str]
+
+
+# Record-level provenance for a child row (one set per row, not per field).
+_PROVENANCE = {
+    "source_quote": (Optional[str], Field(None, description="Exact supporting quote from the document.")),
+    "source_location": (Optional[str], Field(None, description="Where in the document the row is stated.")),
+    "confidence": (float, Field(0.0, ge=0.0, le=1.0, description="Confidence this row is correct, 0-1.")),
+}
+
+
+def _child_model(name: str, fields: list) -> type[BaseModel]:
+    spec = {key: (_child_type(key), Field(None, description=desc)) for key, _r, _c, desc in fields}
+    spec.update(_PROVENANCE)
+    return create_model(name, **spec)
+
+
+ProductExtraction = _child_model("ProductExtraction", _PRODUCT_FIELDS)
+BenefitExtraction = _child_model("BenefitExtraction", _BENEFIT_FIELDS)
+CessionRuleExtraction = _child_model("CessionRuleExtraction", _CESSION_FIELDS)
+
+# The treaty-level flat fields (ExtractedField each) + the child collections.
 TreatyExtraction = create_model(
     "TreatyExtraction",
-    __doc__="All defined data points to extract from a reinsurance treaty. "
-            "Every field must be present in the output; use value=null when the "
-            "treaty does not address the item.",
-    **{key: (ExtractedField, Field(..., description=desc)) for key, _req, _cat, desc in _FIELDS},
+    __doc__="Data extracted from a reinsurance treaty: treaty-level fields (each "
+            "with provenance), plus lists of products, benefits and cession "
+            "rules (one row per layer). Use null / empty lists when absent.",
+    **{key: (ExtractedField, Field(..., description=desc)) for key, _req, _cat, desc in _TREATY_FIELDS},
+    products=(list[ProductExtraction], Field(default_factory=list, description="Products in scope.")),
+    benefits=(list[BenefitExtraction], Field(default_factory=list, description="Benefits in scope.")),
+    cession_rules=(list[CessionRuleExtraction], Field(default_factory=list, description="Cession rules / layers.")),
 )
+
+# Field-key lists per collection (used by storage to copy the right columns).
+PRODUCT_KEYS = [f[0] for f in _PRODUCT_FIELDS]
+BENEFIT_KEYS = [f[0] for f in _BENEFIT_FIELDS]
+CESSION_KEYS = [f[0] for f in _CESSION_FIELDS]
 
 
 # ---------------------------------------------------------------------------
@@ -156,8 +204,10 @@ def field_label(key: str) -> str:
 
 
 def field_catalog() -> dict[str, str]:
-    """Mapping of field_key -> description (kept for backward compatibility)."""
-    return {key: desc for key, _req, _cat, desc in _FIELDS}
+    """Treaty-level field_key -> description (the flat data points).
+
+    Children live in their own collections, not the flat catalog."""
+    return {key: desc for key, _req, _cat, desc in _TREATY_FIELDS}
 
 
 def field_metadata() -> list[dict]:
@@ -175,7 +225,9 @@ def field_metadata() -> list[dict]:
     ]
 
 
-FIELD_KEYS: frozenset[str] = frozenset(key for key, *_ in _FIELDS)
+# Only treaty-level (flat) fields can be edited/amended by key; children are
+# replaced wholesale (MVP) rather than addressed individually.
+FIELD_KEYS: frozenset[str] = frozenset(f[0] for f in _TREATY_FIELDS)
 
 
 # ---------------------------------------------------------------------------
@@ -209,5 +261,17 @@ class AmendmentExtraction(BaseModel):
         None, description="Date the amendment takes effect (ISO date), if stated."
     )
     changes: list[AmendedField] = Field(
-        ..., description="Every data point whose value changes. Empty if the document changes nothing in the catalogue."
+        ..., description="Every treaty-level data point whose value changes. Empty if none change."
+    )
+    # Child collections: when the amendment changes the products/benefits/cession
+    # rules, return the COMPLETE new list and it replaces the previous one
+    # wholesale. Leave as null to carry the existing rows forward unchanged.
+    products: Optional[list[ProductExtraction]] = Field(
+        None, description="If the products in scope change, the full new list; else null."
+    )
+    benefits: Optional[list[BenefitExtraction]] = Field(
+        None, description="If the benefits in scope change, the full new list; else null."
+    )
+    cession_rules: Optional[list[CessionRuleExtraction]] = Field(
+        None, description="If the cession rules / layers change, the full new list; else null."
     )

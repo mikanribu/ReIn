@@ -11,13 +11,16 @@ committed work — it's the menu to prioritise from.
 
 ## 1. Data model & extraction
 
-- [ ] 🔴 **L — Relational products / benefits / layers.** Model multiple
-  products, benefits and cession layers per treaty as real one-to-many tables
-  (the catalogue's "one row per layer" intent), instead of the current flat
-  single-product / layers-1–3 shape. Touches: nested extraction schema, new
-  tables, review UI (sections), analytics/RAG, and most tests. *Design agreed;
-  two questions open — do benefits nest under products, and confirm amendments
-  version the whole treaty.*
+- [x] 🔴 **L — Relational products / benefits / layers (MVP).** ✅ Done. Products,
+  benefits and cession rules/layers are now one-to-many child tables
+  (`TreatyProduct` / `TreatyBenefit` / `CessionRule`), flat lists at treaty
+  level. Extraction returns nested lists; review shows child sections; analytics
+  and RAG read the child rows. Amendments **replace a collection wholesale**.
+- [ ] 🟡 **L — Nested (per-row) amendment addressing.** The follow-on to the
+  MVP: amend a *specific* product/benefit/layer field (e.g. "layer 2's ceding
+  ratio") instead of replacing the whole collection. Needs a child-row addressing
+  scheme in `AmendedField`, granular diff of collections, and child editing in
+  the review screen.
 - [ ] 🟡 **M — Configurable classification dimensions.** Add an explicit
   category/product/segment classification step (a couple of extracted tags) so
   analytics can group by business-defined dimensions, and let users choose which
@@ -104,6 +107,8 @@ committed work — it's the menu to prioritise from.
 
 ## Recently delivered (for context)
 
+- **Relational products / benefits / cession-layers** (MVP): child tables,
+  nested extraction, review sections, wholesale-replace amendments.
 - Two-area app: **Treaty Review** + **Knowledge Base** (analytics, AI summary,
   RAG Ask with citations).
 - Treaty-aware **chat assistant** (tool-free, grounded, citations).

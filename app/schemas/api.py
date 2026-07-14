@@ -67,8 +67,55 @@ class VersionSummary(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class ProductOut(BaseModel):
+    product_code: Optional[str] = None
+    product_name: Optional[str] = None
+    product_type: Optional[str] = None
+    product_scope_status: Optional[str] = None
+    source_quote: Optional[str] = None
+    source_location: Optional[str] = None
+    confidence: Optional[float] = None
+    model_config = {"from_attributes": True}
+
+
+class BenefitOut(BaseModel):
+    benefit_code: Optional[str] = None
+    benefit_name: Optional[str] = None
+    benefit_type: Optional[str] = None
+    source_quote: Optional[str] = None
+    source_location: Optional[str] = None
+    confidence: Optional[float] = None
+    model_config = {"from_attributes": True}
+
+
+class CessionRuleOut(BaseModel):
+    country_code: Optional[str] = None
+    cession_effective_start_date: Optional[str] = None
+    cession_effective_end_date: Optional[str] = None
+    policy_inception_start_date: Optional[str] = None
+    policy_inception_end_date: Optional[str] = None
+    cession_basis: Optional[str] = None
+    layer_number: Optional[int] = None
+    layer_name: Optional[str] = None
+    cedant_retention_ratio: Optional[float] = None
+    reinsurer_cession_ratio: Optional[float] = None
+    layer_attachment_amount: Optional[float] = None
+    layer_limit_amount: Optional[float] = None
+    layer_detachment_amount: Optional[float] = None
+    maximum_cedant_retention_amount: Optional[float] = None
+    aggregation_basis: Optional[str] = None
+    priority_order: Optional[int] = None
+    source_quote: Optional[str] = None
+    source_location: Optional[str] = None
+    confidence: Optional[float] = None
+    model_config = {"from_attributes": True}
+
+
 class VersionDetail(VersionSummary):
     data_points: list[DataPointOut]
+    products: list[ProductOut] = []
+    benefits: list[BenefitOut] = []
+    cession_rules: list[CessionRuleOut] = []
 
 
 class TreatyOut(BaseModel):
@@ -162,6 +209,9 @@ class CurrentValuesOut(BaseModel):
     version_number: int
     approved_at: Optional[datetime]
     values: dict[str, FieldValue]
+    products: list[ProductOut] = []
+    benefits: list[BenefitOut] = []
+    cession_rules: list[CessionRuleOut] = []
 
 
 # --- Chat assistant -----------------------------------------------------------

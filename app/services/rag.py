@@ -32,7 +32,8 @@ Rules:
 
 
 def _chunk_text(treaty: Treaty, version: TreatyVersion) -> str:
-    """A compact, retrievable rendering of one treaty's key data points."""
+    """A compact, retrievable rendering of one treaty: treaty-level fields plus
+    its products, benefits and cession rules/layers."""
     lines = [f"Treaty {treaty.reference}: {treaty.name}"]
     for dp in sorted(version.data_points, key=lambda d: d.field_key):
         if dp.value in (None, "", []):
@@ -41,6 +42,24 @@ def _chunk_text(treaty: Treaty, version: TreatyVersion) -> str:
         lines.append(f"{dp.field_label}: {value}")
         if dp.source_quote:
             lines.append(f'  ("{dp.source_quote}")')
+    products = [p.product_name or p.product_type for p in version.products if (p.product_name or p.product_type)]
+    if products:
+        lines.append("Products: " + ", ".join(str(p) for p in products))
+    benefits = [b.benefit_name or b.benefit_type for b in version.benefits if (b.benefit_name or b.benefit_type)]
+    if benefits:
+        lines.append("Benefits: " + ", ".join(str(b) for b in benefits))
+    for c in version.cession_rules:
+        parts = []
+        if c.layer_number is not None:
+            parts.append(f"layer {c.layer_number}")
+        if c.cession_basis:
+            parts.append(str(c.cession_basis))
+        if c.reinsurer_cession_ratio is not None:
+            parts.append(f"cession {c.reinsurer_cession_ratio}%")
+        if c.layer_limit_amount is not None:
+            parts.append(f"limit {c.layer_limit_amount}")
+        if parts:
+            lines.append("Cession rule: " + ", ".join(parts))
     return "\n".join(lines)
 
 

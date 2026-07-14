@@ -17,22 +17,80 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models import (
+    CessionRule,
     DataPoint,
     DataPointStatus,
     Document,
     Treaty,
+    TreatyBenefit,
+    TreatyProduct,
     TreatyVersion,
     VersionOrigin,
     VersionStatus,
     utcnow,
 )
 from app.schemas.treaty_fields import (
+    BENEFIT_KEYS,
+    CESSION_KEYS,
     FIELD_KEYS,
+    PRODUCT_KEYS,
     AmendmentExtraction,
     TreatyExtraction,
     field_label,
 )
 from app.services import audit
+
+# (collection attribute on the extraction/version, ORM model, data-field keys).
+_CHILD_SPECS = [
+    ("products", TreatyProduct, PRODUCT_KEYS),
+    ("benefits", TreatyBenefit, BENEFIT_KEYS),
+    ("cession_rules", CessionRule, CESSION_KEYS),
+]
+
+
+def _write_children(db: Session, version: TreatyVersion, source) -> None:
+    """Write child rows (products/benefits/cession rules) from an extraction or
+    amendment object whose collections are lists of the child Pydantic models."""
+    for attr, Model, keys in _CHILD_SPECS:
+        for i, item in enumerate(getattr(source, attr) or []):
+            db.add(Model(
+                version_id=version.id, seq=i,
+                source_quote=getattr(item, "source_quote", None),
+                source_location=getattr(item, "source_location", None),
+                confidence=getattr(item, "confidence", None),
+                **{k: getattr(item, k, None) for k in keys},
+            ))
+
+
+def _copy_children(db: Session, base: TreatyVersion, new_version: TreatyVersion,
+                   only: set[str] | None = None) -> None:
+    """Copy child rows from the base version to a new version, unchanged.
+    ``only`` limits which collections to copy (used when some are replaced)."""
+    for attr, Model, keys in _CHILD_SPECS:
+        if only is not None and attr not in only:
+            continue
+        for row in getattr(base, attr):
+            db.add(Model(
+                version_id=new_version.id, seq=row.seq,
+                source_quote=row.source_quote, source_location=row.source_location,
+                confidence=row.confidence, **{k: getattr(row, k) for k in keys},
+            ))
+
+
+def children_dict(version: TreatyVersion) -> dict:
+    """Serialize a version's child collections to plain dicts (for /current)."""
+    def rows(attr, keys):
+        return [
+            {**{k: getattr(r, k) for k in keys},
+             "source_quote": r.source_quote, "source_location": r.source_location,
+             "confidence": r.confidence}
+            for r in getattr(version, attr)
+        ]
+    return {
+        "products": rows("products", PRODUCT_KEYS),
+        "benefits": rows("benefits", BENEFIT_KEYS),
+        "cession_rules": rows("cession_rules", CESSION_KEYS),
+    }
 
 
 # --------------------------------------------------------------------------
@@ -123,7 +181,7 @@ def create_treaty_from_extraction(
     db.add(version)
     db.flush()
 
-    for key in TreatyExtraction.model_fields:
+    for key in FIELD_KEYS:
         f = getattr(extraction, key)
         db.add(
             DataPoint(
@@ -138,6 +196,7 @@ def create_treaty_from_extraction(
                 rationale=f.rationale,
             )
         )
+    _write_children(db, version, extraction)
 
     audit.record(
         db,
@@ -329,6 +388,14 @@ def create_amendment_from_document(
         dp.rationale = change.rationale
         applied.append(change.field_key)
 
+    # Child collections: a returned list replaces that collection wholesale;
+    # a null one is carried forward unchanged. (MVP — see docs/BACKLOG.md for
+    # granular per-row amendments.)
+    all_attrs = {attr for attr, _m, _k in _CHILD_SPECS}
+    replaced = {attr for attr in all_attrs if getattr(amendment, attr) is not None}
+    _copy_children(db, base, version, only=all_attrs - replaced)  # carry forward the rest
+    _write_children(db, version, amendment)  # None collections write nothing
+
     audit.record(
         db,
         actor=actor,
@@ -341,6 +408,7 @@ def create_amendment_from_document(
             "base_version": base.version_number,
             "new_version": version.version_number,
             "changed_fields": applied,
+            "replaced_collections": sorted(replaced),
             "summary": amendment.summary,
             "effective_date": _date_text(amendment.effective_date),
         },
@@ -379,6 +447,7 @@ def create_manual_amendment(
     db.flush()
 
     copies = _copy_data_points(base, version, db)
+    _copy_children(db, base, version)  # manual amendments only touch treaty-level fields
     old_values = {}
     for key, new_value in changes.items():
         dp = copies.get(key)

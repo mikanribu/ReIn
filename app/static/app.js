@@ -892,6 +892,50 @@ async function renderTreaty(treatyId, tab = "versions") {
 // Version review
 // ---------------------------------------------------------------------------
 
+// Render the product / benefit / cession-rule child collections as tables.
+// Read-only in this MVP (edited via re-extraction / wholesale amendment).
+function childCell(v) {
+  if (v === null || v === undefined || v === "") return '<span class="muted">—</span>';
+  return esc(String(v));
+}
+function childTable(title, icon, rows, cols) {
+  const count = rows.length;
+  const inner = count === 0
+    ? '<p class="muted small">None recorded.</p>'
+    : `<table><thead><tr>${cols.map((c) => `<th>${esc(c.label)}</th>`).join("")}</tr></thead>
+       <tbody>${rows.map((r) => `<tr>${cols.map((c) => `<td>${childCell(r[c.key])}</td>`).join("")}</tr>`).join("")}</tbody></table>`;
+  return `<div class="panel">
+    <h2>${icon} ${esc(title)} <span class="muted small">(${count})</span></h2>
+    ${inner}
+  </div>`;
+}
+function childSections(v) {
+  return (
+    childTable("Products", "📦", v.products || [], [
+      { key: "product_code", label: "Code" },
+      { key: "product_name", label: "Name" },
+      { key: "product_type", label: "Type" },
+      { key: "product_scope_status", label: "Scope" },
+    ]) +
+    childTable("Benefits", "🎯", v.benefits || [], [
+      { key: "benefit_code", label: "Code" },
+      { key: "benefit_name", label: "Name" },
+      { key: "benefit_type", label: "Type" },
+    ]) +
+    childTable("Cession rules / layers", "📚", v.cession_rules || [], [
+      { key: "layer_number", label: "Layer" },
+      { key: "layer_name", label: "Name" },
+      { key: "cession_basis", label: "Basis" },
+      { key: "reinsurer_cession_ratio", label: "Cession %" },
+      { key: "cedant_retention_ratio", label: "Retention %" },
+      { key: "layer_limit_amount", label: "Layer limit" },
+      { key: "maximum_cedant_retention_amount", label: "Max retention" },
+      { key: "aggregation_basis", label: "Aggregation" },
+      { key: "country_code", label: "Country" },
+    ])
+  );
+}
+
 async function renderVersion(treatyId, versionNumber) {
   const [t, v, diff] = await Promise.all([
     api(`/treaties/${treatyId}`),
@@ -1003,7 +1047,8 @@ async function renderVersion(treatyId, versionNumber) {
         <thead><tr><th>Field</th><th>Value</th><th>Status</th><th>Confidence</th><th>Source / rationale</th><th></th></tr></thead>
         <tbody id="dp-body">${v.data_points.map(pointRow).join("")}</tbody>
       </table>
-    </div>`;
+    </div>
+    ${childSections(v)}`;
 
   // Hide-empty toggle
   const hideEmpty = document.getElementById("hide-empty");
