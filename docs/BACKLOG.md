@@ -54,10 +54,15 @@ committed work — it's the menu to prioritise from.
 
 ## 3. UX & frontend
 
-- [ ] 🟡 **M — Review-screen metadata surfacing.** Group the data-point table by
-  category (Treaty / Product & Benefit / Cession & Layers), show a mandatory
-  marker, and flag missing-mandatory values. Makes the new catalogue metadata
-  visible where reviewers work.
+- [x] 🟡 **M — Review-screen metadata surfacing.** ✅ Done. The review screen now
+  fetches `/catalog/fields` and shows a required marker (`*`) on mandatory fields,
+  flags missing strictly-mandatory values with a "missing required" badge (kept
+  visible even under *hide fields not in document*), adds a per-version
+  completeness summary ("N of M required fields missing") and a "Missing required"
+  status filter. Child tables (products / benefits / cession) mark required
+  columns and flag empty mandatory cells too. Category grouping itself was moot:
+  post-relational, the flat data-point table is all Treaty-category, and products
+  / benefits / cession already render as their own category sections.
 - [ ] 🟡 **M — Multi-file / mixed bulk upload.** Finish the "Multiple treaties
   upload (coming soon)" tile: upload many treaties *and* amendments at once, with
   automatic mapping of each amendment to the correct treaty.
