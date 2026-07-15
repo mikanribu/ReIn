@@ -148,6 +148,16 @@ input:focus, textarea:focus, select:focus {
 .file-input.disabled { cursor: default; opacity: 0.55; }
 .file-input.disabled:hover .file-btn { background: #fff; border-color: var(--border); color: var(--text); }
 
+/* Upload tiles: keep the picker + action buttons on one line, and crop a long
+   file name with an ellipsis so it never pushes the buttons onto a new row. */
+.upload-tile .row { flex-wrap: nowrap; }
+.upload-tile .file-input { min-width: 0; }          /* allow the picker to shrink */
+.upload-tile .file-input .file-name {
+  min-width: 0; max-width: 220px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.upload-tile .row > button { flex: none; }          /* buttons keep their size */
+
 /* Date input: align the native picker indicator with the theme. */
 input[type="date"]::-webkit-calendar-picker-indicator { cursor: pointer; opacity: 0.55; }
 input[type="date"]::-webkit-calendar-picker-indicator:hover { opacity: 1; }
