@@ -111,6 +111,15 @@ class TreatyVersion(Base):
     data_points: Mapped[list["DataPoint"]] = relationship(
         back_populates="version", order_by="DataPoint.field_key", cascade="all, delete-orphan"
     )
+    products: Mapped[list["TreatyProduct"]] = relationship(
+        back_populates="version", order_by="TreatyProduct.seq", cascade="all, delete-orphan"
+    )
+    benefits: Mapped[list["TreatyBenefit"]] = relationship(
+        back_populates="version", order_by="TreatyBenefit.seq", cascade="all, delete-orphan"
+    )
+    cession_rules: Mapped[list["CessionRule"]] = relationship(
+        back_populates="version", order_by="CessionRule.seq", cascade="all, delete-orphan"
+    )
 
     @property
     def is_editable(self) -> bool:
@@ -141,6 +150,72 @@ class DataPoint(Base):
     updated_at: Mapped[datetime] = mapped_column(default=utcnow, onupdate=utcnow)
 
     version: Mapped[TreatyVersion] = relationship(back_populates="data_points")
+
+
+class _ChildProvenance:
+    """Mixin: record-level provenance for a child row (one set per row, rather
+    than per field). ``seq`` preserves the order the model returned them in."""
+
+    seq: Mapped[int] = mapped_column(Integer, default=0)
+    source_quote: Mapped[str | None] = mapped_column(Text, nullable=True)
+    source_location: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+
+class TreatyProduct(Base, _ChildProvenance):
+    """A product in scope for a treaty version (flat list; one row per product)."""
+
+    __tablename__ = "treaty_products"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    version_id: Mapped[str] = mapped_column(ForeignKey("treaty_versions.id"), index=True)
+    product_code: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    product_name: Mapped[str | None] = mapped_column(String(256), nullable=True)
+    product_type: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    product_scope_status: Mapped[str | None] = mapped_column(String(64), nullable=True)
+
+    version: Mapped[TreatyVersion] = relationship(back_populates="products")
+
+
+class TreatyBenefit(Base, _ChildProvenance):
+    """A benefit in scope for a treaty version (flat list; one row per benefit)."""
+
+    __tablename__ = "treaty_benefits"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    version_id: Mapped[str] = mapped_column(ForeignKey("treaty_versions.id"), index=True)
+    benefit_code: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    benefit_name: Mapped[str | None] = mapped_column(String(256), nullable=True)
+    benefit_type: Mapped[str | None] = mapped_column(String(128), nullable=True)
+
+    version: Mapped[TreatyVersion] = relationship(back_populates="benefits")
+
+
+class CessionRule(Base, _ChildProvenance):
+    """A cession rule / layer for a treaty version (one row per layer)."""
+
+    __tablename__ = "cession_rules"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    version_id: Mapped[str] = mapped_column(ForeignKey("treaty_versions.id"), index=True)
+    country_code: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    cession_effective_start_date: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    cession_effective_end_date: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    policy_inception_start_date: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    policy_inception_end_date: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    cession_basis: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    layer_number: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    layer_name: Mapped[str | None] = mapped_column(String(256), nullable=True)
+    cedant_retention_ratio: Mapped[float | None] = mapped_column(Float, nullable=True)
+    reinsurer_cession_ratio: Mapped[float | None] = mapped_column(Float, nullable=True)
+    layer_attachment_amount: Mapped[float | None] = mapped_column(Float, nullable=True)
+    layer_limit_amount: Mapped[float | None] = mapped_column(Float, nullable=True)
+    layer_detachment_amount: Mapped[float | None] = mapped_column(Float, nullable=True)
+    maximum_cedant_retention_amount: Mapped[float | None] = mapped_column(Float, nullable=True)
+    aggregation_basis: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    priority_order: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+    version: Mapped[TreatyVersion] = relationship(back_populates="cession_rules")
 
 
 class TreatyChunk(Base):

@@ -11,13 +11,16 @@ committed work — it's the menu to prioritise from.
 
 ## 1. Data model & extraction
 
-- [ ] 🔴 **L — Relational products / benefits / layers.** Model multiple
-  products, benefits and cession layers per treaty as real one-to-many tables
-  (the catalogue's "one row per layer" intent), instead of the current flat
-  single-product / layers-1–3 shape. Touches: nested extraction schema, new
-  tables, review UI (sections), analytics/RAG, and most tests. *Design agreed;
-  two questions open — do benefits nest under products, and confirm amendments
-  version the whole treaty.*
+- [x] 🔴 **L — Relational products / benefits / layers (MVP).** ✅ Done. Products,
+  benefits and cession rules/layers are now one-to-many child tables
+  (`TreatyProduct` / `TreatyBenefit` / `CessionRule`), flat lists at treaty
+  level. Extraction returns nested lists; review shows child sections; analytics
+  and RAG read the child rows. Amendments **replace a collection wholesale**.
+- [ ] 🟡 **L — Nested (per-row) amendment addressing.** The follow-on to the
+  MVP: amend a *specific* product/benefit/layer field (e.g. "layer 2's ceding
+  ratio") instead of replacing the whole collection. Needs a child-row addressing
+  scheme in `AmendedField`, granular diff of collections, and child editing in
+  the review screen.
 - [ ] 🟡 **M — Configurable classification dimensions.** Add an explicit
   category/product/segment classification step (a couple of extracted tags) so
   analytics can group by business-defined dimensions, and let users choose which
@@ -100,10 +103,43 @@ committed work — it's the menu to prioritise from.
 - [ ] 🟢 **S — Query tuning.** Audit N+1s and add eager-loading/indexes as the
   corpus grows (analytics already uses `selectinload`).
 
+## 7. Deployment & hosting
+
+The app currently runs locally (uvicorn + SQLite). Getting it to a shared/
+production environment:
+
+- [ ] 🔴 **M — Containerise.** A `Dockerfile` (uvicorn/gunicorn serving the API
+  + the static UI) and a `docker-compose` for local prod-like runs. Pin the
+  provider extras actually used.
+- [ ] 🔴 **M — Managed Postgres (Supabase).** Point `DATABASE_URL` at Supabase,
+  apply `supabase/schema.sql` (or Alembic), and verify the app on Postgres — the
+  audit trigger and `jsonb`/vector columns especially. Adopt **Alembic** so schema
+  changes deploy safely.
+- [ ] 🔴 **M — Host the API.** Deploy the container to a platform (Fly.io /
+  Render / Azure Container Apps / a VM behind Nginx). HTTPS/TLS, a domain, health
+  checks, and env-var/secret injection (no keys in the image).
+- [ ] 🟡 **M — LLM/embeddings in the cloud.** Ollama needs a model server —
+  either run it on a GPU/CPU instance, or switch chat/extraction to Anthropic and
+  embeddings to **Azure `text-embedding-3-small`** so nothing self-hosted is
+  required. Decide per data-residency needs.
+- [ ] 🟡 **S — Hosted MLflow (if used).** Run a tracking server with a Postgres
+  backend + artifact store, access-controlled; set `MLFLOW_TRACKING_URI` to it.
+  Otherwise keep tracing off in prod.
+- [ ] 🟡 **M — CI/CD.** GitHub Actions to test, build the image, and deploy on
+  merge; environment separation (dev / staging / prod) with per-env config.
+- [ ] 🟢 **S — Prod ops.** Structured logging, error tracking (e.g. Sentry),
+  backups for Postgres, and a documented restore/reset runbook.
+
+> Note: several security items (🔴 **Authentication & identity**, rate limiting)
+> in §4 are effectively **deployment blockers** — don't expose the app publicly
+> while `actor` is self-asserted.
+
 ---
 
 ## Recently delivered (for context)
 
+- **Relational products / benefits / cession-layers** (MVP): child tables,
+  nested extraction, review sections, wholesale-replace amendments.
 - Two-area app: **Treaty Review** + **Knowledge Base** (analytics, AI summary,
   RAG Ask with citations).
 - Treaty-aware **chat assistant** (tool-free, grounded, citations).

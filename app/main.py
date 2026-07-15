@@ -13,15 +13,15 @@ from app.api.routes_kb import router as kb_router
 from app.api.routes_treaties import router as treaties_router
 from app.database import init_db
 
-from app.observability import init_mlflow
-
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
-    init_mlflow()
+    # MLflow is initialized lazily on the first traced operation (see
+    # observability.run), NOT here — so a slow/misconfigured tracking store can
+    # never block application startup.
     yield
 
 

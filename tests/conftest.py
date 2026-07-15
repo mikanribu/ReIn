@@ -11,9 +11,13 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.schemas.treaty_fields import (
+    FIELD_KEYS,
     AmendedField,
     AmendmentExtraction,
+    BenefitExtraction,
+    CessionRuleExtraction,
     ExtractedField,
+    ProductExtraction,
     TreatyExtraction,
 )
 
@@ -29,8 +33,8 @@ def _f(value=None, quote=None, location=None, confidence=0.0, rationale=None) ->
 
 
 def make_fake_extraction() -> TreatyExtraction:
-    """A canned life-reinsurance extraction for the current catalogue."""
-    fields = {key: _f() for key in TreatyExtraction.model_fields}
+    """A canned life-reinsurance extraction: treaty-level fields + child rows."""
+    fields = {key: _f() for key in FIELD_KEYS}
     fields.update(
         treaty_code=_f("QS-LIFE-2027-01", quote="Treaty Reference: QS-LIFE-2027-01",
                        location="Header", confidence=0.99),
@@ -50,56 +54,49 @@ def make_fake_extraction() -> TreatyExtraction:
                                    location="Article 2", confidence=0.98),
         contract_currency_code=_f("USD", quote="expressed in US Dollars (USD)", location="Article 6", confidence=0.99),
         settlement_currency_code=_f("USD", quote="settled in USD", location="Article 6", confidence=0.98),
-        product_code=_f("TL-100", location="Schedule A", confidence=0.9),
-        product_name=_f("Term Life 20", location="Schedule A", confidence=0.95),
-        product_type=_f("term_life", quote="term life product", location="Schedule A", confidence=0.95),
-        product_scope_status=_f("included", location="Schedule A", confidence=0.95),
-        benefit_name=_f("Death Benefit", location="Schedule B", confidence=0.96),
-        benefit_type=_f("death", quote="death benefit", location="Schedule B", confidence=0.96),
-        country_code=_f("PH", quote="Philippines", location="Article 1", confidence=0.95),
-        cession_effective_start_date=_f("2027-01-01", location="Article 3", confidence=0.95),
-        policy_inception_start_date=_f("2027-01-01", location="Article 3", confidence=0.93),
-        cession_basis=_f("quota_share", quote="ceded on a quota share basis", location="Article 3", confidence=0.97),
-        layer_number=_f(1, location="Article 3", confidence=0.95),
-        layer_name=_f("Base quota share layer", location="Article 3", confidence=0.9),
-        layer_1_ceding_ratio=_f(60, quote="60% ceded to the Reinsurer", location="Article 3", confidence=0.97),
-        cedant_retention_ratio=_f(40, quote="the Company shall retain 40%", location="Article 3", confidence=0.98),
-        reinsurer_cession_ratio=_f(60, quote="the Reinsurer's share shall be 60%",
-                                   location="Article 3", confidence=0.98),
-        layer_attachment_amount=_f(0, location="Article 3", confidence=0.9),
-        layer_limit_amount=_f(5_000_000, quote="up to USD 5,000,000 per life", location="Article 3", confidence=0.97),
-        maximum_cedant_retention_amount=_f(1_000_000, quote="maximum retention of USD 1,000,000",
-                                           location="Article 4", confidence=0.98),
-        aggregation_basis=_f("per_life", quote="aggregated per life", location="Article 4", confidence=0.95),
-        priority_order=_f(1, location="Article 3", confidence=0.9),
     )
-    return TreatyExtraction(**fields)
+    return TreatyExtraction(
+        products=[ProductExtraction(
+            product_code="TL-100", product_name="Term Life 20", product_type="term_life",
+            product_scope_status="included", source_location="Schedule A", confidence=0.95)],
+        benefits=[BenefitExtraction(
+            benefit_name="Death Benefit", benefit_type="death",
+            source_quote="death benefit", source_location="Schedule B", confidence=0.96)],
+        cession_rules=[CessionRuleExtraction(
+            country_code="PH", cession_effective_start_date="2027-01-01",
+            policy_inception_start_date="2027-01-01", cession_basis="quota_share",
+            layer_number=1, layer_name="Base quota share layer",
+            cedant_retention_ratio=40, reinsurer_cession_ratio=60,
+            layer_attachment_amount=0, layer_limit_amount=5_000_000,
+            maximum_cedant_retention_amount=1_000_000, aggregation_basis="per_life",
+            priority_order=1, source_quote="the Reinsurer's share shall be 60%",
+            source_location="Article 3", confidence=0.98)],
+        **fields,
+    )
 
 
 def make_fake_amendment() -> AmendmentExtraction:
-    """A canned amendment for the current catalogue."""
+    """A canned amendment: a treaty-level change + a wholesale-replaced cession layer."""
     return AmendmentExtraction(
-        summary="Addendum No. 1: reinsurer cession increased to 70% (retention 30%), "
-                "layer limit to USD 7.5m, maximum retention to USD 1.25m, effective 1 July 2027.",
+        summary="Addendum No. 1: reinsurer share to 70% (retention 30%), layer limit to "
+                "USD 7.5m, maximum retention to USD 1.25m, effective 1 July 2027.",
         effective_date="2027-07-01",
         changes=[
-            AmendedField(field_key="reinsurer_cession_ratio", new_value=70,
-                         source_quote="the Reinsurer's share is increased from 60% to 70%",
+            AmendedField(field_key="party_share_percentage", new_value=70,
+                         source_quote="the Reinsurer's participation is increased from 60% to 70%",
                          source_location="Clause 1", confidence=0.98,
-                         rationale="Cession share increased."),
-            AmendedField(field_key="cedant_retention_ratio", new_value=30,
-                         source_quote="the Company's retention is reduced to 30%",
-                         source_location="Clause 1", confidence=0.98,
-                         rationale="Retention reduced accordingly."),
-            AmendedField(field_key="layer_limit_amount", new_value=7_500_000,
-                         source_quote="the layer limit is increased to USD 7,500,000",
-                         source_location="Clause 2", confidence=0.97,
-                         rationale="Layer limit increased."),
-            AmendedField(field_key="maximum_cedant_retention_amount", new_value=1_250_000,
-                         source_quote="maximum retention is increased to USD 1,250,000",
-                         source_location="Clause 2", confidence=0.97,
-                         rationale="Maximum retention increased."),
+                         rationale="Participation share increased."),
         ],
+        # Cession rules changed → the full new list replaces the old one wholesale.
+        cession_rules=[CessionRuleExtraction(
+            country_code="PH", cession_effective_start_date="2027-07-01",
+            policy_inception_start_date="2027-01-01", cession_basis="quota_share",
+            layer_number=1, layer_name="Base quota share layer",
+            cedant_retention_ratio=30, reinsurer_cession_ratio=70,
+            layer_attachment_amount=0, layer_limit_amount=7_500_000,
+            maximum_cedant_retention_amount=1_250_000, aggregation_basis="per_life",
+            priority_order=1, source_quote="the layer limit is increased to USD 7,500,000",
+            source_location="Clause 2", confidence=0.98)],
     )
 
 

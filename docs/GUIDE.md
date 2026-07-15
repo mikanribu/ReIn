@@ -212,9 +212,10 @@ package" so `from app.services import treaties` works.
   `.env`. One place for every knob.
 - `database.py` — creates the SQLAlchemy **engine** (the DB connection factory)
   and `get_db()`, which hands each request its own **session** (a unit of work).
-- `models.py` — six tables as classes: `Document`, `Treaty`, `TreatyVersion`,
-  `DataPoint`, `TreatyChunk` (the semantic index), `AuditLog`. Also the
-  status/origin constants.
+- `models.py` — the tables as classes: `Document`, `Treaty`, `TreatyVersion`,
+  `DataPoint` (treaty-level fields), the child collections `TreatyProduct` /
+  `TreatyBenefit` / `CessionRule`, `TreatyChunk` (the semantic index), and
+  `AuditLog`. Also the status/origin constants.
 - `observability.py` — optional MLflow helpers: `init_mlflow()`, a `run()`
   context manager, and `log_extraction()` / `log_reindex()`. Everything is a
   no-op unless `MLFLOW_ENABLED=true`, and MLflow is imported lazily so the app
@@ -404,11 +405,13 @@ class Treaty(Base):
   fetches the related rows.
 - `ForeignKey("treaties.id")` on `TreatyVersion` links a version to its treaty.
 
-The six tables and how they relate:
+The tables and how they relate:
 ```
 Document        (an uploaded file: text + original bytes + sha256)
-Treaty  1───*  TreatyVersion  1───*  DataPoint
-   │                │                    (one row per field per version, with provenance)
+Treaty  1───*  TreatyVersion  1───*  DataPoint     (treaty-level fields, with provenance)
+   │                │          1───*  TreatyProduct  ┐
+   │                │          1───*  TreatyBenefit  ├ relational child collections
+   │                │          1───*  CessionRule    ┘ (one row per product/benefit/layer)
    │                └── source_document_id → Document
    └── 1───*  TreatyChunk   (the semantic index: one text chunk + embedding per treaty)
 AuditLog        (append-only log; not linked by FK, keyed by treaty_id)
@@ -627,9 +630,12 @@ Cession & Layers. From that one list:
 Add an entry to `_FIELDS` and the entire pipeline picks it up. That's the payoff
 of schema-driven design — say this in a presentation and people nod.
 
-> The catalogue is currently **flat** (single product/benefit, layers 1–3 as
-> columns). Modelling multiple products/benefits/layers per treaty as real
-> one-to-many tables is a planned enhancement — see `docs/BACKLOG.md`.
+> **Relational children:** the treaty-level fields above are flat `DataPoint`
+> rows, but **products, benefits and cession rules/layers are one-to-many child
+> tables** (a treaty version owns many of each). Extraction returns them as
+> nested lists; the review screen shows them as their own sections. Amendments
+> currently **replace a child collection wholesale** (return the full new list);
+> granular per-row amendment addressing is still on `docs/BACKLOG.md`.
 
 ### 8.2 Transparency: never store a bare value
 

@@ -47,20 +47,26 @@ def test_extraction_creates_reviewable_draft(client):
     assert version["origin"] == "extraction"
 
     points = {p["field_key"]: p for p in version["data_points"]}
-    # Every catalog field is present, found or not.
+    # Every treaty-level catalog field is present as a flat data point, found or not.
     catalog = client.get("/catalog").json()
     assert set(points) == set(catalog)
 
-    # Transparency: extracted values carry provenance.
-    cession = points["reinsurer_cession_ratio"]
-    assert cession["value"] == 60
-    assert "60%" in cession["source_quote"]
-    assert cession["source_location"] == "Article 3"
-    assert cession["confidence"] > 0.9
+    # Transparency: treaty-level values carry provenance.
+    share = points["party_share_percentage"]
+    assert share["value"] == 60
+    assert "60%" in share["source_quote"]
+    assert share["source_location"] == "Preamble"
+    assert share["confidence"] > 0.9
 
     # Fields the document doesn't address are visibly not_found, not silently dropped.
-    assert points["layer_2_ceding_ratio"]["status"] == "not_found"
-    assert points["layer_2_ceding_ratio"]["value"] is None
+    assert points["treaty_effective_end_date"]["status"] == "not_found"
+    assert points["treaty_effective_end_date"]["value"] is None
+
+    # Child collections are extracted as one-to-many rows.
+    assert len(version["products"]) == 1
+    assert version["products"][0]["product_type"] == "term_life"
+    assert len(version["cession_rules"]) == 1
+    assert version["cession_rules"][0]["reinsurer_cession_ratio"] == 60
 
     treaties = client.get("/treaties").json()
     assert len(treaties) == 1
@@ -120,14 +126,16 @@ def test_approve_version_1(client):
 
     current = client.get(f"/treaties/{tid}/current").json()
     assert current["version_number"] == 1
-    assert current["values"]["reinsurer_cession_ratio"] == 60
+    assert current["values"]["party_share_percentage"] == 60
     assert current["values"]["reinsurer_name"] == "Helvetia Re, Zurich"
+    # Children are served under /current too.
+    assert current["cession_rules"][0]["reinsurer_cession_ratio"] == 60
 
 
 def test_approved_version_is_immutable(client):
     tid = state["treaty_id"]
     resp = client.patch(
-        f"/treaties/{tid}/versions/1/data-points/reinsurer_cession_ratio",
+        f"/treaties/{tid}/versions/1/data-points/party_share_percentage",
         json={"value": 1, "actor": "mallory"},
     )
     assert resp.status_code == 409
@@ -153,20 +161,21 @@ def test_amendment_from_document_creates_draft_v2(client):
     assert version["effective_date"] == "2027-07-01"
 
     points = {p["field_key"]: p for p in version["data_points"]}
-    assert points["reinsurer_cession_ratio"]["value"] == 70
-    assert points["reinsurer_cession_ratio"]["status"] == "amended_by_document"
+    assert points["party_share_percentage"]["value"] == 70
+    assert points["party_share_percentage"]["status"] == "amended_by_document"
     assert points["contract_currency_code"]["value"] == "USD"
     assert points["contract_currency_code"]["status"] == "carried_forward"
 
-    # Diff shows exactly what the amendment changed.
+    # The cession rules were replaced wholesale by the amendment.
+    assert version["cession_rules"][0]["reinsurer_cession_ratio"] == 70
+    assert version["cession_rules"][0]["layer_limit_amount"] == 7_500_000
+
+    # Diff shows the treaty-level changes (children are replaced wholesale, MVP).
     diff = client.get(f"/treaties/{tid}/versions/2/diff").json()
     changed = {c["field_key"]: c for c in diff["changes"]}
-    assert set(changed) == {
-        "reinsurer_cession_ratio", "cedant_retention_ratio",
-        "layer_limit_amount", "maximum_cedant_retention_amount",
-    }
-    assert changed["reinsurer_cession_ratio"]["old_value"] == 60
-    assert changed["reinsurer_cession_ratio"]["new_value"] == 70
+    assert set(changed) == {"party_share_percentage"}
+    assert changed["party_share_percentage"]["old_value"] == 60
+    assert changed["party_share_percentage"]["new_value"] == 70
 
     # Downstream values are untouched until the amendment is approved.
     assert client.get(f"/treaties/{tid}/current").json()["version_number"] == 1
@@ -192,8 +201,9 @@ def test_approve_v2_supersedes_v1(client):
 
     current = client.get(f"/treaties/{tid}/current").json()
     assert current["version_number"] == 2
-    assert current["values"]["reinsurer_cession_ratio"] == 70
-    assert current["values"]["cedant_retention_ratio"] == 30
+    assert current["values"]["party_share_percentage"] == 70
+    assert current["cession_rules"][0]["reinsurer_cession_ratio"] == 70
+    assert current["cession_rules"][0]["cedant_retention_ratio"] == 30
 
 
 # --------------------------------------------------------------------------
@@ -224,8 +234,8 @@ def test_manual_amendment(client):
     current = client.get(f"/treaties/{tid}/current").json()
     assert current["version_number"] == 3
     assert current["values"]["reinsurer_name"] == "Helvetia Re Europe GmbH"
-    # Prior amendment still in force.
-    assert current["values"]["reinsurer_cession_ratio"] == 70
+    # Prior amendment still in force (children carried forward through the manual amendment).
+    assert current["cession_rules"][0]["reinsurer_cession_ratio"] == 70
 
 
 def test_manual_amendment_unknown_key_rejected(client):

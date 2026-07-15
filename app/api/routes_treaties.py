@@ -254,6 +254,7 @@ def get_current_values(treaty_id: str, db: Session = Depends(get_db)) -> Current
     version = treaty_service.latest_approved_version(db, treaty_id)
     if version is None:
         raise HTTPException(404, "This treaty has no approved version yet.")
+    children = treaty_service.children_dict(version)
     return CurrentValuesOut(
         treaty_id=treaty.id,
         reference=treaty.reference,
@@ -261,6 +262,7 @@ def get_current_values(treaty_id: str, db: Session = Depends(get_db)) -> Current
         version_number=version.version_number,
         approved_at=version.reviewed_at,
         values=treaty_service.values_dict(version),
+        **children,
     )
 
 

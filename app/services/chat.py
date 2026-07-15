@@ -94,8 +94,41 @@ def _treaty_context(db: Session, treaty_id: str) -> tuple[str, list[str]] | None
         labels.append(dp.field_label)
         loc = f" [{dp.source_location}]" if dp.source_location else ""
         lines.append(f"- {dp.field_label}: {_compact_value(dp.value)}{loc}")
+
+    # Child collections (products / benefits / cession rules) as extra context,
+    # exposing their labels so the assistant can cite them.
+    labels += _child_lines(lines, "Products", latest.products,
+                           [("product_name", "Product Name"), ("product_type", "Product Type"),
+                            ("product_scope_status", "Product Scope Status")])
+    labels += _child_lines(lines, "Benefits", latest.benefits,
+                           [("benefit_name", "Benefit Name"), ("benefit_type", "Benefit Type")])
+    labels += _child_lines(lines, "Cession rules / layers", latest.cession_rules,
+                           [("layer_number", "Layer Number"), ("cession_basis", "Cession Basis"),
+                            ("reinsurer_cession_ratio", "Reinsurer Cession Ratio"),
+                            ("cedant_retention_ratio", "Cedant Retention Ratio"),
+                            ("layer_limit_amount", "Layer Limit Amount"),
+                            ("maximum_cedant_retention_amount", "Maximum Cedant Retention Amount")])
     lines.append("=== END TREATY CONTEXT ===")
     return "\n".join(lines), labels
+
+
+def _child_lines(lines: list[str], heading: str, rows, fields) -> list[str]:
+    """Append a heading + one line per child row; return the labels used."""
+    if not rows:
+        return []
+    lines.append(f"{heading}:")
+    seen: list[str] = []
+    for row in rows:
+        parts = []
+        for attr, label in fields:
+            val = getattr(row, attr, None)
+            if val not in (None, ""):
+                parts.append(f"{label} {val}")
+                if label not in seen:
+                    seen.append(label)
+        if parts:
+            lines.append("- " + ", ".join(parts))
+    return seen
 
 
 def _compact_value(value) -> str:
