@@ -51,6 +51,29 @@ const post = (path, payload) =>
 const patch = (path, payload) =>
   api(path, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
 
+// Field-catalogue metadata (key -> {label, category, requirement, mandatory}),
+// fetched once and cached. Drives the required-field markers and gap flagging
+// on the review screen.
+let _fieldMetaCache = null;
+async function fieldMeta() {
+  if (!_fieldMetaCache) {
+    const list = await api("/catalog/fields");
+    _fieldMetaCache = Object.fromEntries(list.map((f) => [f.key, f]));
+  }
+  return _fieldMetaCache;
+}
+// A field the reviewer should expect a value for (any "Mandatory…" requirement).
+const isRequired = (m) => !!(m && m.mandatory);
+// Unconditionally required — used to flag a genuine gap. Conditional ones
+// (e.g. "Mandatory for layered/surplus") are marked but not flagged as missing.
+const isStrictRequired = (m) => !!(m && m.requirement === "Mandatory");
+const isEmptyVal = (v) => v === null || v === undefined || v === "";
+// Small "required" marker shown next to a mandatory field's label.
+function requiredMark(m) {
+  if (!isRequired(m)) return "";
+  return `<span class="req" title="${esc(m.requirement)} field">*</span>`;
+}
+
 // Animated loader for long operations. `stages` is a list of messages shown
 // in sequence (advancing on a timer) alongside a spinner and elapsed seconds.
 // Returns a handle with setMessage() and stop().
@@ -894,34 +917,39 @@ async function renderTreaty(treatyId, tab = "versions") {
 
 // Render the product / benefit / cession-rule child collections as tables.
 // Read-only in this MVP (edited via re-extraction / wholesale amendment).
-function childCell(v) {
-  if (v === null || v === undefined || v === "") return '<span class="muted">—</span>';
+function childCell(v, missing) {
+  if (isEmptyVal(v)) return missing ? '<span class="badge missing">missing</span>' : '<span class="muted">—</span>';
   return esc(String(v));
 }
-function childTable(title, icon, rows, cols) {
+function childTable(title, icon, rows, cols, meta) {
   const count = rows.length;
+  const head = cols.map((c) => `<th>${esc(c.label)}${requiredMark(meta[c.key])}</th>`).join("");
   const inner = count === 0
     ? '<p class="muted small">None recorded.</p>'
-    : `<table><thead><tr>${cols.map((c) => `<th>${esc(c.label)}</th>`).join("")}</tr></thead>
-       <tbody>${rows.map((r) => `<tr>${cols.map((c) => `<td>${childCell(r[c.key])}</td>`).join("")}</tr>`).join("")}</tbody></table>`;
+    : `<table><thead><tr>${head}</tr></thead>
+       <tbody>${rows.map((r) => `<tr>${cols.map((c) => {
+          const strict = isStrictRequired(meta[c.key]);
+          const missing = strict && isEmptyVal(r[c.key]);
+          return `<td class="${missing ? "cell-missing" : ""}">${childCell(r[c.key], missing)}</td>`;
+        }).join("")}</tr>`).join("")}</tbody></table>`;
   return `<div class="panel">
     <h2>${icon} ${esc(title)} <span class="muted small">(${count})</span></h2>
     ${inner}
   </div>`;
 }
-function childSections(v) {
+function childSections(v, meta) {
   return (
     childTable("Products", "📦", v.products || [], [
       { key: "product_code", label: "Code" },
       { key: "product_name", label: "Name" },
       { key: "product_type", label: "Type" },
       { key: "product_scope_status", label: "Scope" },
-    ]) +
+    ], meta) +
     childTable("Benefits", "🎯", v.benefits || [], [
       { key: "benefit_code", label: "Code" },
       { key: "benefit_name", label: "Name" },
       { key: "benefit_type", label: "Type" },
-    ]) +
+    ], meta) +
     childTable("Cession rules / layers", "📚", v.cession_rules || [], [
       { key: "layer_number", label: "Layer" },
       { key: "layer_name", label: "Name" },
@@ -932,15 +960,16 @@ function childSections(v) {
       { key: "maximum_cedant_retention_amount", label: "Max retention" },
       { key: "aggregation_basis", label: "Aggregation" },
       { key: "country_code", label: "Country" },
-    ])
+    ], meta)
   );
 }
 
 async function renderVersion(treatyId, versionNumber) {
-  const [t, v, diff] = await Promise.all([
+  const [t, v, diff, meta] = await Promise.all([
     api(`/treaties/${treatyId}`),
     api(`/treaties/${treatyId}/versions/${versionNumber}`),
     api(`/treaties/${treatyId}/versions/${versionNumber}/diff`),
+    fieldMeta(),
   ]);
   const isDraft = v.status === "draft";
   const changedKeys = new Set(diff.changes.map((c) => c.field_key));
@@ -951,6 +980,8 @@ async function renderVersion(treatyId, versionNumber) {
   function pointRow(p) {
     const editable = isDraft;
     const changed = changedKeys.has(p.field_key) && diff.from_version !== null;
+    const m = meta[p.field_key];
+    const missing = isStrictRequired(m) && p.value === null;
     const rowSearch = normText([
       p.field_label,
       p.field_key,
@@ -960,13 +991,14 @@ async function renderVersion(treatyId, versionNumber) {
       p.source_location,
       p.rationale,
       changed ? "changed" : "",
+      missing ? "missing required" : "",
     ].join(" "));
     const valueCell = changed
       ? `<span class="diff-old">${esc(valueToInput(oldValues[p.field_key]) || "—")}</span>
          <span class="diff-new">${esc(valueToInput(p.value) || "—")}</span>`
-      : fmtValue(p.value);
-    return `<tr data-key="${esc(p.field_key)}" data-search="${esc(rowSearch)}" data-status="${esc(p.status)}" data-found="${p.value === null ? "0" : "1"}" data-changed="${changed ? "1" : "0"}" class="${p.value === null ? "notfound" : "found"}">
-      <td style="min-width:170px"><b>${esc(p.field_label)}</b><br /><span class="mono muted small">${esc(p.field_key)}</span></td>
+      : (missing ? '<span class="badge missing">missing required</span>' : fmtValue(p.value));
+    return `<tr data-key="${esc(p.field_key)}" data-search="${esc(rowSearch)}" data-status="${esc(p.status)}" data-found="${p.value === null ? "0" : "1"}" data-changed="${changed ? "1" : "0"}" data-missing="${missing ? "1" : "0"}" class="${p.value === null ? "notfound" : "found"}">
+      <td style="min-width:170px"><b>${esc(p.field_label)}${requiredMark(m)}</b><br /><span class="mono muted small">${esc(p.field_key)}</span></td>
       <td style="min-width:220px">
         <div class="val-display">${valueCell}</div>
         ${editable ? `<div class="editbox" hidden>
@@ -991,6 +1023,13 @@ async function renderVersion(treatyId, versionNumber) {
     ? `<div class="banner warn"><b>${diff.changes.length} change(s)</b> vs approved v${diff.from_version}
        — changed values are shown as <span class="diff-old">old</span> → <span class="diff-new">new</span>.</div>`
     : "";
+
+  // Required-field completeness across the treaty-level data points.
+  const requiredPoints = v.data_points.filter((p) => isStrictRequired(meta[p.field_key]));
+  const missingRequired = requiredPoints.filter((p) => p.value === null);
+  const completeness = requiredPoints.length === 0 ? "" : (missingRequired.length
+    ? `<span class="completeness warn">⚠ ${missingRequired.length} of ${requiredPoints.length} required fields missing</span>`
+    : `<span class="completeness ok">✓ all ${requiredPoints.length} required fields present</span>`);
 
   view.innerHTML = `
     <div class="crumbs"><a href="#/">Treaties</a> / <a href="#/treaty/${t.id}">${esc(t.reference)}</a> / v${v.version_number}</div>
@@ -1022,7 +1061,10 @@ async function renderVersion(treatyId, versionNumber) {
     ${diffBanner}
     <div class="panel">
       <div class="row" style="justify-content:space-between">
-        <h2 style="margin:0">Data points</h2>
+        <div class="row" style="gap:12px">
+          <h2 style="margin:0">Data points</h2>
+          ${completeness}
+        </div>
         <label class="small muted"><input type="checkbox" id="hide-empty" checked /> hide fields not in document</label>
       </div>
       <div class="filters" style="margin-top:10px">
@@ -1039,6 +1081,7 @@ async function renderVersion(treatyId, versionNumber) {
             <option value="amended_by_document">Amended by document</option>
             <option value="carried_forward">Carried forward</option>
             <option value="not_found">Not in document</option>
+            <option value="missing">Missing required</option>
             <option value="changed">Changed vs prior</option>
           </select>
         </label>
@@ -1048,7 +1091,7 @@ async function renderVersion(treatyId, versionNumber) {
         <tbody id="dp-body">${v.data_points.map(pointRow).join("")}</tbody>
       </table>
     </div>
-    ${childSections(v)}`;
+    ${childSections(v, meta)}`;
 
   // Hide-empty toggle
   const hideEmpty = document.getElementById("hide-empty");
@@ -1065,8 +1108,12 @@ async function renderVersion(treatyId, versionNumber) {
       const matchesStatus =
         status === "all" ||
         tr.dataset.status === status ||
-        (status === "changed" && tr.dataset.changed === "1");
-      const hiddenByEmpty = hideEmpty.checked && tr.dataset.found === "0" && !editing;
+        (status === "changed" && tr.dataset.changed === "1") ||
+        (status === "missing" && tr.dataset.missing === "1");
+      // A missing required field is exactly what a reviewer must not overlook,
+      // so keep it visible even when "hide fields not in document" is on.
+      const hiddenByEmpty =
+        hideEmpty.checked && tr.dataset.found === "0" && tr.dataset.missing !== "1" && !editing;
       tr.style.display = matchesText && matchesStatus && !hiddenByEmpty ? "" : "none";
     });
   }
