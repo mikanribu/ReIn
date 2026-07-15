@@ -68,6 +68,7 @@ class VersionSummary(BaseModel):
 
 
 class ProductOut(BaseModel):
+    id: str
     product_code: Optional[str] = None
     product_name: Optional[str] = None
     product_type: Optional[str] = None
@@ -79,6 +80,7 @@ class ProductOut(BaseModel):
 
 
 class BenefitOut(BaseModel):
+    id: str
     benefit_code: Optional[str] = None
     benefit_name: Optional[str] = None
     benefit_type: Optional[str] = None
@@ -89,6 +91,7 @@ class BenefitOut(BaseModel):
 
 
 class CessionRuleOut(BaseModel):
+    id: str
     country_code: Optional[str] = None
     cession_effective_start_date: Optional[str] = None
     cession_effective_end_date: Optional[str] = None
@@ -172,6 +175,29 @@ class ManualAmendmentRequest(BaseModel):
     )
     reason: str = Field(..., description="Business reason for the amendment (audited).")
     effective_date: Optional[date] = None
+    actor: str = "user"
+
+
+# --- Child-collection editing (draft only) ---------------------------------
+
+class ChildRowEdit(BaseModel):
+    changes: dict[str, FieldValue] = Field(
+        ..., description="Mapping of child field_key -> new value (only the fields to change)."
+    )
+    note: Optional[str] = Field(None, description="Why the row was changed (audited).")
+    actor: str = "user"
+
+
+class ChildRowCreate(BaseModel):
+    values: dict[str, FieldValue] = Field(
+        default_factory=dict, description="Field values for the new row (omitted keys default to null)."
+    )
+    note: Optional[str] = Field(None, description="Why the row was added (audited).")
+    actor: str = "user"
+
+
+class ChildRowDelete(BaseModel):
+    note: Optional[str] = Field(None, description="Why the row was removed (audited).")
     actor: str = "user"
 
 

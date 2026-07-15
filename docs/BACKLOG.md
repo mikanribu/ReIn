@@ -16,11 +16,15 @@ committed work — it's the menu to prioritise from.
   (`TreatyProduct` / `TreatyBenefit` / `CessionRule`), flat lists at treaty
   level. Extraction returns nested lists; review shows child sections; analytics
   and RAG read the child rows. Amendments **replace a collection wholesale**.
-- [ ] 🟡 **L — Nested (per-row) amendment addressing.** The follow-on to the
-  MVP: amend a *specific* product/benefit/layer field (e.g. "layer 2's ceding
-  ratio") instead of replacing the whole collection. Needs a child-row addressing
-  scheme in `AmendedField`, granular diff of collections, and child editing in
-  the review screen.
+- [~] 🟡 **L — Nested (per-row) amendment addressing.** Partly done.
+  ✅ **Draft child editing** landed: products / benefits / cession-layer rows can
+  be edited, added and removed per-row on a *draft* version (a full-field form
+  surfaces missing values to fill), via `POST/PATCH/DELETE
+  /treaties/{id}/versions/{n}/children/{collection}[/{row_id}]`, draft-only and
+  audited (`child_row.added|edited|deleted`).
+  ⏳ **Still open:** addressing a specific child field through the *amendment*
+  path on an approved version (a child-row addressing scheme in `AmendedField` +
+  granular collection diff), so amendments needn't replace a collection wholesale.
 - [ ] 🟡 **M — Configurable classification dimensions.** Add an explicit
   category/product/segment classification step (a couple of extracted tags) so
   analytics can group by business-defined dimensions, and let users choose which

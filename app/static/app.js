@@ -915,42 +915,30 @@ async function renderTreaty(treatyId, tab = "versions") {
 // Version review
 // ---------------------------------------------------------------------------
 
-// Render the product / benefit / cession-rule child collections as tables.
-// Read-only in this MVP (edited via re-extraction / wholesale amendment).
-function childCell(v, missing) {
-  if (isEmptyVal(v)) return missing ? '<span class="badge missing">missing</span>' : '<span class="muted">—</span>';
-  return esc(String(v));
-}
-function childTable(title, icon, rows, cols, meta) {
-  const count = rows.length;
-  const head = cols.map((c) => `<th>${esc(c.label)}${requiredMark(meta[c.key])}</th>`).join("");
-  const inner = count === 0
-    ? '<p class="muted small">None recorded.</p>'
-    : `<table><thead><tr>${head}</tr></thead>
-       <tbody>${rows.map((r) => `<tr>${cols.map((c) => {
-          const strict = isStrictRequired(meta[c.key]);
-          const missing = strict && isEmptyVal(r[c.key]);
-          return `<td class="${missing ? "cell-missing" : ""}">${childCell(r[c.key], missing)}</td>`;
-        }).join("")}</tr>`).join("")}</tbody></table>`;
-  return `<div class="panel">
-    <h2>${icon} ${esc(title)} <span class="muted small">(${count})</span></h2>
-    ${inner}
-  </div>`;
-}
-function childSections(v, meta) {
-  return (
-    childTable("Products", "📦", v.products || [], [
+// The product / benefit / cession-rule child collections. On drafts the rows
+// can be edited, added and removed (per-row); approved versions are read-only.
+// `attr` matches the version payload key; `slug` matches the API route.
+const CHILD_CONFIG = [
+  {
+    slug: "products", attr: "products", title: "Products", icon: "📦", noun: "product",
+    cols: [
       { key: "product_code", label: "Code" },
       { key: "product_name", label: "Name" },
       { key: "product_type", label: "Type" },
       { key: "product_scope_status", label: "Scope" },
-    ], meta) +
-    childTable("Benefits", "🎯", v.benefits || [], [
+    ],
+  },
+  {
+    slug: "benefits", attr: "benefits", title: "Benefits", icon: "🎯", noun: "benefit",
+    cols: [
       { key: "benefit_code", label: "Code" },
       { key: "benefit_name", label: "Name" },
       { key: "benefit_type", label: "Type" },
-    ], meta) +
-    childTable("Cession rules / layers", "📚", v.cession_rules || [], [
+    ],
+  },
+  {
+    slug: "cession-rules", attr: "cession_rules", title: "Cession rules / layers", icon: "📚", noun: "layer",
+    cols: [
       { key: "layer_number", label: "Layer" },
       { key: "layer_name", label: "Name" },
       { key: "cession_basis", label: "Basis" },
@@ -960,8 +948,74 @@ function childSections(v, meta) {
       { key: "maximum_cedant_retention_amount", label: "Max retention" },
       { key: "aggregation_basis", label: "Aggregation" },
       { key: "country_code", label: "Country" },
-    ], meta)
-  );
+    ],
+  },
+];
+
+// Every catalogue field for a collection, in catalogue order (drives the edit
+// form, which exposes all fields — including ones the table doesn't display).
+function childKeys(cfg, meta) {
+  const cat = cfg.slug === "cession-rules" ? "Cession & Layers" : "Product & Benefit";
+  const prefix = cfg.slug === "benefits" ? "benefit_" : cfg.slug === "products" ? "product_" : "";
+  return Object.values(meta)
+    .filter((m) => m.category === cat && m.key.startsWith(prefix))
+    .map((m) => m.key);
+}
+
+function childCell(v, missing) {
+  if (isEmptyVal(v)) return missing ? '<span class="badge missing">missing</span>' : '<span class="muted">—</span>';
+  return esc(String(v));
+}
+
+function childTable(cfg, rows, meta, isDraft) {
+  const cols = cfg.cols;
+  const span = cols.length + (isDraft ? 1 : 0);
+  const head = cols.map((c) => `<th>${esc(c.label)}${requiredMark(meta[c.key])}</th>`).join("")
+    + (isDraft ? "<th></th>" : "");
+  const body = rows.length === 0
+    ? `<tr><td colspan="${span}"><span class="muted small">None recorded.</span></td></tr>`
+    : rows.map((r) => `<tr data-row-id="${esc(r.id)}">
+        ${cols.map((c) => {
+          const missing = isStrictRequired(meta[c.key]) && isEmptyVal(r[c.key]);
+          return `<td class="${missing ? "cell-missing" : ""}">${childCell(r[c.key], missing)}</td>`;
+        }).join("")}
+        ${isDraft ? `<td class="row-actions">
+          <button class="ghost child-edit">Edit</button>
+          <button class="ghost child-delete">Delete</button></td>` : ""}
+      </tr>`).join("");
+  return `<div class="panel" data-slug="${cfg.slug}">
+    <div class="row" style="justify-content:space-between">
+      <h2 style="margin:0">${cfg.icon} ${esc(cfg.title)} <span class="muted small">(${rows.length})</span></h2>
+      ${isDraft ? `<button class="secondary child-add">+ Add ${esc(cfg.noun)}</button>` : ""}
+    </div>
+    <div class="child-editor" hidden></div>
+    <table style="margin-top:10px"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>
+  </div>`;
+}
+
+// Editable form listing every field of a collection (all fields, so missing
+// ones can be filled). `row` is the existing row for edit, or null for add.
+function childFormHtml(cfg, meta, row) {
+  const fields = childKeys(cfg, meta).map((k) => {
+    const m = meta[k];
+    return `<label class="child-field">
+      <span>${esc(m.label)}${requiredMark(m)}</span>
+      <input type="text" data-field="${esc(k)}" value="${row ? esc(valueToInput(row[k])) : ""}" />
+    </label>`;
+  }).join("");
+  return `<div class="child-form">
+    <div class="child-title">${row ? "Edit" : "New"} ${esc(cfg.noun)}</div>
+    <div class="child-grid">${fields}</div>
+    <input type="text" class="child-note" placeholder="reason / note (optional)" />
+    <div class="row" style="gap:8px">
+      <button class="secondary child-save">Save</button>
+      <button class="ghost child-cancel">Cancel</button>
+    </div>
+  </div>`;
+}
+
+function childSections(v, meta, isDraft) {
+  return CHILD_CONFIG.map((cfg) => childTable(cfg, v[cfg.attr] || [], meta, isDraft)).join("");
 }
 
 async function renderVersion(treatyId, versionNumber) {
@@ -1091,7 +1145,7 @@ async function renderVersion(treatyId, versionNumber) {
         <tbody id="dp-body">${v.data_points.map(pointRow).join("")}</tbody>
       </table>
     </div>
-    ${childSections(v, meta)}`;
+    ${childSections(v, meta, isDraft)}`;
 
   // Hide-empty toggle
   const hideEmpty = document.getElementById("hide-empty");
@@ -1219,6 +1273,79 @@ async function renderVersion(treatyId, versionNumber) {
       else if (e.key === "Escape") { e.preventDefault(); closeEditor(box.closest("tr")); }
     });
   });
+
+  // --- Child-collection editing (drafts only) ------------------------------
+  async function saveChild(cfg, editor, row) {
+    const inputs = [...editor.querySelectorAll("input[data-field]")];
+    const note = editor.querySelector(".child-note").value.trim() || null;
+    const val = (inp) => (inp.value.trim() === "" ? null : inp.value.trim());
+    try {
+      if (row) {
+        const changes = {};
+        inputs.forEach((inp) => {
+          const next = val(inp);
+          if (String(row[inp.dataset.field] ?? "") !== String(next ?? "")) changes[inp.dataset.field] = next;
+        });
+        if (!Object.keys(changes).length) return toast("No changes to save");
+        await patch(`/treaties/${treatyId}/versions/${versionNumber}/children/${cfg.slug}/${row.id}`,
+          { changes, note, actor: actor() });
+        toast(`Updated ${cfg.noun}`);
+      } else {
+        const values = {};
+        inputs.forEach((inp) => { const x = val(inp); if (x !== null) values[inp.dataset.field] = x; });
+        if (!Object.keys(values).length) return toast("Enter at least one value", true);
+        await post(`/treaties/${treatyId}/versions/${versionNumber}/children/${cfg.slug}`,
+          { values, note, actor: actor() });
+        toast(`Added ${cfg.noun}`);
+      }
+      await renderVersion(treatyId, versionNumber);
+    } catch (err) { toast(err.message, true); }
+  }
+
+  async function deleteChild(cfg, rowId) {
+    try {
+      await api(`/treaties/${treatyId}/versions/${versionNumber}/children/${cfg.slug}/${rowId}`, {
+        method: "DELETE", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ actor: actor() }),
+      });
+      toast(`Deleted ${cfg.noun}`);
+      await renderVersion(treatyId, versionNumber);
+    } catch (err) { toast(err.message, true); }
+  }
+
+  if (isDraft) {
+    document.querySelectorAll(".panel[data-slug]").forEach((panel) => {
+      const cfg = CHILD_CONFIG.find((c) => c.slug === panel.dataset.slug);
+      const editor = panel.querySelector(".child-editor");
+      const openForm = (row) => {
+        editor.innerHTML = childFormHtml(cfg, meta, row);
+        editor.hidden = false;
+        editor.querySelector("input")?.focus();
+        editor.querySelector(".child-save").onclick = () => saveChild(cfg, editor, row);
+        editor.querySelector(".child-cancel").onclick = () => { editor.hidden = true; editor.innerHTML = ""; };
+      };
+      panel.querySelector(".child-add")?.addEventListener("click", () => openForm(null));
+      panel.querySelectorAll(".child-edit").forEach((btn) => {
+        btn.onclick = () => {
+          const rowId = btn.closest("tr").dataset.rowId;
+          openForm((v[cfg.attr] || []).find((r) => r.id === rowId));
+        };
+      });
+      // Delete uses a two-step inline confirm (no native dialog).
+      panel.querySelectorAll(".child-delete").forEach((btn) => {
+        btn.onclick = () => {
+          const tr = btn.closest("tr");
+          const rowId = tr.dataset.rowId;
+          const cell = btn.closest(".row-actions");
+          cell.innerHTML = `<span class="small muted">Delete?</span>
+            <button class="ghost child-yes">Yes</button>
+            <button class="ghost child-no">No</button>`;
+          cell.querySelector(".child-yes").onclick = () => deleteChild(cfg, rowId);
+          cell.querySelector(".child-no").onclick = () => renderVersion(treatyId, versionNumber);
+        };
+      });
+    });
+  }
 
   // Manual amendment mode (approved versions): edit values -> collect ->
   // submit as one amendment with a reason.

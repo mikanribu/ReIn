@@ -225,7 +225,8 @@ package" so `from app.services import treaties` works.
 - `routes_documents.py` — `POST /documents` (upload), `GET /documents` (list),
   `/{id}`, `/text`, `/file` (view the original), `POST /documents/sample`.
 - `routes_treaties.py` — the core loop: `/catalog`, `/catalog/fields`, `/stats`,
-  `/extractions`, the treaty/version reads, `PATCH` a data point, approve/reject,
+  `/extractions`, the treaty/version reads, `PATCH` a data point, add/edit/delete
+  a child row (`…/versions/{n}/children/{collection}[/{row_id}]`), approve/reject,
   the two amendment endpoints, `/current`, and the audit endpoints.
 - `routes_analytics.py` — `GET /analytics/portfolio` (deterministic breakdowns)
   and `POST /analytics/summary` (the grounded AI summary).
@@ -244,8 +245,8 @@ package" so `from app.services import treaties` works.
 - `extraction.py` — two functions that send the document text to the model and
   get back a validated Pydantic object (treaty extraction / amendment changes).
 - `treaties.py` — the heart: create a treaty from an extraction, edit/approve/
-  reject a draft, create amendment versions, diff versions. All the rules live
-  here.
+  reject a draft, edit/add/delete child rows on a draft, create amendment
+  versions, diff versions. All the rules live here.
 - `stats.py` — `compute_stats()`: the home-dashboard KPI counts (shared by the
   `/stats` route and the chat assistant's portfolio overview).
 - `analytics.py` — `portfolio_analytics()`: counts per category + totals per
@@ -633,9 +634,12 @@ of schema-driven design — say this in a presentation and people nod.
 > **Relational children:** the treaty-level fields above are flat `DataPoint`
 > rows, but **products, benefits and cession rules/layers are one-to-many child
 > tables** (a treaty version owns many of each). Extraction returns them as
-> nested lists; the review screen shows them as their own sections. Amendments
-> currently **replace a child collection wholesale** (return the full new list);
-> granular per-row amendment addressing is still on `docs/BACKLOG.md`.
+> nested lists; the review screen shows them as their own sections and, **on a
+> draft, lets a reviewer edit, add and delete rows per-row** (a full-field form
+> surfaces the missing values to fill). Amendments on an *approved* version still
+> **replace a child collection wholesale** (return the full new list); granular
+> per-row amendment addressing through the amendment path is still on
+> `docs/BACKLOG.md`.
 
 ### 8.2 Transparency: never store a bare value
 
@@ -644,10 +648,23 @@ rationale**. The reviewer can verify each number against the document before
 approving. The app is explicitly *not* a black box — that's a deliberate,
 demonstrable design goal, visible in the review screen.
 
+The review screen also makes the catalogue metadata (§8.1) actionable: mandatory
+fields carry a required marker (`*`), a per-version **completeness summary**
+counts how many required fields are still missing, and a strictly-mandatory field
+with no value is flagged **"missing required"** (and kept visible even under
+*hide fields not in document*, since a missing mandatory value is exactly the gap
+a reviewer must not overlook). The same markers apply to the child tables.
+
 ### 8.3 Human-in-the-loop with immutable versions
 
 - Extraction produces a **draft**. Only a human `approve` makes values usable
   downstream (`GET /current` refuses to serve anything but an approved version).
+- On a draft, a reviewer can correct the extraction: **flat treaty-level fields**
+  edit inline (`PATCH …/data-points/{key}`), and the **child rows** (products /
+  benefits / cession layers) can be edited, added or removed per-row
+  (`…/children/{collection}`). Every such change is audited
+  (`child_row.added|edited|deleted`). The same draft-only guard applies to all of
+  it — the child endpoints also return `409` on an approved version.
 - Approved versions are **immutable** — editing one returns `409`. To change an
   approved treaty you create an **amendment**, which copies the latest approved
   version, applies changes, and starts a new draft. History is never rewritten.

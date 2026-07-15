@@ -212,6 +212,23 @@ td.cell-missing { background: var(--bad-soft); }
 .completeness.warn { color: var(--bad); }
 .completeness.ok { color: var(--ok); }
 
+/* Child-collection (products / benefits / cession) row editing. */
+td.row-actions { white-space: nowrap; text-align: right; }
+.child-editor { margin-top: 12px; }
+.child-form {
+  border: 1px solid var(--border); border-radius: 8px;
+  padding: 14px; background: var(--accent-soft);
+}
+.child-title { font-weight: 600; margin-bottom: 10px; }
+.child-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 10px 16px; margin-bottom: 12px;
+}
+.child-field { display: flex; flex-direction: column; gap: 3px; }
+.child-field span { font-size: 12px; color: var(--muted); }
+.child-field input { font-size: 13px; }
+.child-form .child-note { width: 100%; margin-bottom: 10px; }
+
 .banner { border-radius: 8px; padding: 10px 14px; margin-bottom: 14px; font-size: 13.5px; }
 .banner.warn { background: var(--warn-soft); color: var(--warn); border: 1px solid #eedc9a; }
 .banner.ok { background: var(--ok-soft); color: var(--ok); border: 1px solid #b7e1c1; }

@@ -194,6 +194,19 @@ BENEFIT_KEYS = [f[0] for f in _BENEFIT_FIELDS]
 CESSION_KEYS = [f[0] for f in _CESSION_FIELDS]
 
 
+def coerce_child_value(key: str, value):
+    """Coerce a raw (JSON/string) value to the Python type a child column
+    expects. Empty/blank -> None. Raises ValueError on a bad number so callers
+    can surface a clean validation error."""
+    if value is None or (isinstance(value, str) and value.strip() == ""):
+        return None
+    if key in _INT_KEYS:
+        return int(float(value)) if isinstance(value, str) else int(value)
+    if key in _FLOAT_KEYS:
+        return float(value)
+    return str(value)
+
+
 # ---------------------------------------------------------------------------
 # Catalogue accessors derived from _FIELDS
 # ---------------------------------------------------------------------------

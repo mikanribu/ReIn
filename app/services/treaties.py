@@ -36,6 +36,7 @@ from app.schemas.treaty_fields import (
     PRODUCT_KEYS,
     AmendmentExtraction,
     TreatyExtraction,
+    coerce_child_value,
     field_label,
 )
 from app.services import audit
@@ -81,7 +82,7 @@ def children_dict(version: TreatyVersion) -> dict:
     """Serialize a version's child collections to plain dicts (for /current)."""
     def rows(attr, keys):
         return [
-            {**{k: getattr(r, k) for k in keys},
+            {"id": r.id, "seq": r.seq, **{k: getattr(r, k) for k in keys},
              "source_quote": r.source_quote, "source_location": r.source_location,
              "confidence": r.confidence}
             for r in getattr(version, attr)
@@ -263,6 +264,149 @@ def edit_data_point(
     db.commit()
     db.refresh(dp)
     return dp
+
+
+# --------------------------------------------------------------------------
+# Child collections (products / benefits / cession rules) — draft editing.
+# Rows are addressed by id; only drafts are editable. Every mutation is audited.
+# --------------------------------------------------------------------------
+
+# URL slug -> (relationship attribute, ORM model, data-field keys).
+_CHILD_BY_SLUG = {
+    "products": ("products", TreatyProduct, PRODUCT_KEYS),
+    "benefits": ("benefits", TreatyBenefit, BENEFIT_KEYS),
+    "cession-rules": ("cession_rules", CessionRule, CESSION_KEYS),
+}
+
+
+def _resolve_collection(slug: str):
+    spec = _CHILD_BY_SLUG.get(slug)
+    if spec is None:
+        raise HTTPException(
+            404, f"Unknown collection '{slug}'. Use one of: {', '.join(_CHILD_BY_SLUG)}."
+        )
+    return spec
+
+
+def _get_child_row(version: TreatyVersion, attr: str, row_id: str):
+    row = next((r for r in getattr(version, attr) if r.id == row_id), None)
+    if row is None:
+        raise HTTPException(404, f"Row '{row_id}' not found in {attr} of version {version.version_number}")
+    return row
+
+
+def _coerce_children(slug: str, keys, values: dict) -> dict:
+    """Validate the given field keys belong to the collection and coerce each
+    value to its column type. Returns the coerced {key: value} mapping."""
+    unknown = set(values) - set(keys)
+    if unknown:
+        raise HTTPException(
+            422,
+            f"Unknown field(s) for {slug}: {', '.join(sorted(unknown))}. "
+            f"Valid keys: {', '.join(keys)}.",
+        )
+    coerced = {}
+    for k, v in values.items():
+        try:
+            coerced[k] = coerce_child_value(k, v)
+        except (TypeError, ValueError):
+            raise HTTPException(422, f"Invalid value for '{k}': {v!r}")
+    return coerced
+
+
+def _child_row_dict(row, keys) -> dict:
+    """Serialize a child row (id + fields + record-level provenance)."""
+    return {
+        "id": row.id, "seq": row.seq,
+        **{k: getattr(row, k) for k in keys},
+        "source_quote": row.source_quote,
+        "source_location": row.source_location,
+        "confidence": row.confidence,
+    }
+
+
+def edit_child_row(
+    db: Session, version: TreatyVersion, slug: str, row_id: str,
+    changes: dict, actor: str, note: str | None,
+) -> dict:
+    _require_draft(version)
+    attr, _Model, keys = _resolve_collection(slug)
+    row = _get_child_row(version, attr, row_id)
+    coerced = _coerce_children(slug, keys, changes)
+    old = {k: getattr(row, k) for k in coerced}
+    for k, v in coerced.items():
+        setattr(row, k, v)
+
+    audit.record(
+        db,
+        actor=actor,
+        action="child_row.edited",
+        entity_type=attr,
+        entity_id=row.id,
+        treaty_id=version.treaty_id,
+        details={
+            "version": version.version_number,
+            "collection": slug,
+            "old": old,
+            "new": coerced,
+            "note": note,
+        },
+    )
+    db.commit()
+    db.refresh(row)
+    return _child_row_dict(row, keys)
+
+
+def add_child_row(
+    db: Session, version: TreatyVersion, slug: str,
+    values: dict, actor: str, note: str | None,
+) -> dict:
+    _require_draft(version)
+    attr, Model, keys = _resolve_collection(slug)
+    coerced = _coerce_children(slug, keys, values)
+    seqs = [r.seq for r in getattr(version, attr)]
+    row = Model(
+        version_id=version.id,
+        seq=(max(seqs) + 1 if seqs else 0),
+        **{k: coerced.get(k) for k in keys},
+    )
+    db.add(row)
+    db.flush()  # assign row.id before auditing
+
+    audit.record(
+        db,
+        actor=actor,
+        action="child_row.added",
+        entity_type=attr,
+        entity_id=row.id,
+        treaty_id=version.treaty_id,
+        details={"version": version.version_number, "collection": slug, "values": coerced, "note": note},
+    )
+    db.commit()
+    db.refresh(row)
+    return _child_row_dict(row, keys)
+
+
+def delete_child_row(
+    db: Session, version: TreatyVersion, slug: str, row_id: str,
+    actor: str, note: str | None,
+) -> None:
+    _require_draft(version)
+    attr, _Model, keys = _resolve_collection(slug)
+    row = _get_child_row(version, attr, row_id)
+    snapshot = _child_row_dict(row, keys)
+    db.delete(row)
+
+    audit.record(
+        db,
+        actor=actor,
+        action="child_row.deleted",
+        entity_type=attr,
+        entity_id=row_id,
+        treaty_id=version.treaty_id,
+        details={"version": version.version_number, "collection": slug, "row": snapshot, "note": note},
+    )
+    db.commit()
 
 
 def approve_version(db: Session, version: TreatyVersion, actor: str, note: str | None) -> TreatyVersion:

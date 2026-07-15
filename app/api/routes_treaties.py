@@ -18,6 +18,9 @@ from app.models import (
 from app.schemas.api import (
     AuditEntryOut,
     AuditVerification,
+    ChildRowCreate,
+    ChildRowDelete,
+    ChildRowEdit,
     CurrentValuesOut,
     DataPointEdit,
     DataPointOut,
@@ -181,6 +184,52 @@ def edit_data_point(
     version = treaty_service.get_version(db, treaty_id, version_number)
     dp = treaty_service.edit_data_point(db, version, field_key, payload.value, payload.actor, payload.note)
     return DataPointOut.model_validate(dp, from_attributes=True)
+
+
+# --------------------------------------------------------------------------
+# Review: edit child collections (products / benefits / cession rules) on drafts
+# --------------------------------------------------------------------------
+
+@router.post("/treaties/{treaty_id}/versions/{version_number}/children/{collection}")
+def add_child_row(
+    treaty_id: str,
+    version_number: int,
+    collection: str,
+    payload: ChildRowCreate,
+    db: Session = Depends(get_db),
+) -> dict:
+    """Add a row to a child collection of a draft version (audited)."""
+    version = treaty_service.get_version(db, treaty_id, version_number)
+    return treaty_service.add_child_row(db, version, collection, payload.values, payload.actor, payload.note)
+
+
+@router.patch("/treaties/{treaty_id}/versions/{version_number}/children/{collection}/{row_id}")
+def edit_child_row(
+    treaty_id: str,
+    version_number: int,
+    collection: str,
+    row_id: str,
+    payload: ChildRowEdit,
+    db: Session = Depends(get_db),
+) -> dict:
+    """Edit fields of one child row on a draft version (audited)."""
+    version = treaty_service.get_version(db, treaty_id, version_number)
+    return treaty_service.edit_child_row(db, version, collection, row_id, payload.changes, payload.actor, payload.note)
+
+
+@router.delete("/treaties/{treaty_id}/versions/{version_number}/children/{collection}/{row_id}")
+def delete_child_row(
+    treaty_id: str,
+    version_number: int,
+    collection: str,
+    row_id: str,
+    payload: ChildRowDelete = ChildRowDelete(),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Remove one child row from a draft version (audited)."""
+    version = treaty_service.get_version(db, treaty_id, version_number)
+    treaty_service.delete_child_row(db, version, collection, row_id, payload.actor, payload.note)
+    return {"deleted": row_id}
 
 
 @router.post("/treaties/{treaty_id}/versions/{version_number}/approve", response_model=VersionDetail)
