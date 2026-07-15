@@ -116,6 +116,63 @@ output (e.g. `llama3.1`, `qwen2.5`, `mistral-nemo`). If a misconfigured
 provider is selected, the app fails fast with a message naming exactly what to
 install or set.
 
+## Observability with MLflow (optional)
+
+MLflow gives you **model/quality observability** — traces of every LLM call plus
+metrics for extraction and indexing. It is entirely opt-in and **off by
+default**; when disabled, none of it runs and MLflow need not even be installed.
+(This is separate from the hash-chained audit trail, which is the compliance
+record.)
+
+**What gets logged** (only when enabled):
+
+| Operation | MLflow run | Logged |
+|---|---|---|
+| Treaty extraction (`POST /extractions`) | `extract:<file>` | field coverage, mean confidence, low-confidence count, duration + the LLM trace (via autolog) |
+| Chat (`POST /chat`) | `chat` | the LLM trace |
+| Index build (`POST /kb/reindex`, `/kb/index/{id}`) | `kb.reindex` / `kb.index` | chunks, chars, dimension, duration, embedding provider/model |
+
+No document text or treaty content is logged — only metrics and the trace MLflow
+autolog captures. See `app/observability.py`.
+
+### Enable it
+
+```bash
+pip install mlflow            # not in requirements.txt (optional extra)
+```
+`.env`:
+```bash
+MLFLOW_ENABLED=true
+MLFLOW_TRACKING_URI=sqlite:///mlflow.db     # SQLite backend — no server needed
+MLFLOW_EXPERIMENT=treaty-extraction
+```
+Then use the app normally. MLflow initializes **lazily on the first traced
+operation** (never at startup, so a misconfigured tracking store can't block the
+app from booting). Do an extraction or a reindex to create the first run.
+
+### View the runs
+
+In a **second terminal, from the repo root** (so the relative DB path matches):
+```bash
+mlflow ui --backend-store-uri sqlite:///mlflow.db --port 5001
+```
+Open <http://localhost:5001>. Use the **Traces** tab for LLM calls and the
+**Runs** table for the metrics above (sort by `mean_confidence` to find weak
+extractions, or compare `kb.reindex` runs across embedding models).
+
+### Gotchas we hit (so you don't)
+
+- **Use the SQLite (or Postgres) backend, not the file store.** MLflow 3.x rejects
+  `file:./mlruns` — use `sqlite:///mlflow.db`. The slashes matter: three = a
+  relative file, so run the app and `mlflow ui` from the same directory.
+- **Don't run `mlflow ui` against the same `mlflow.db` while hammering the app** —
+  a SQLite lock can make the first traced request slow. If it hangs, quit the UI
+  or `mv mlflow.db mlflow.db.bak` and retry.
+- **Python 3.13, not 3.14.** MLflow doesn't run on Python 3.14 yet
+  (`importlib.abc.Traversable` was removed); build your venv on 3.13.
+- **Turn it off in production** unless you're pointing at a secured, remote
+  tracking server — traces include prompts/responses (treaty content).
+
 ## Workflow walkthrough
 
 ```bash
