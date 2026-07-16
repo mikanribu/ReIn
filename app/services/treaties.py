@@ -24,6 +24,7 @@ from app.models import (
     Treaty,
     TreatyBenefit,
     TreatyProduct,
+    TreatyRate,
     TreatyVersion,
     VersionOrigin,
     VersionStatus,
@@ -34,6 +35,7 @@ from app.schemas.treaty_fields import (
     CESSION_KEYS,
     FIELD_KEYS,
     PRODUCT_KEYS,
+    RATE_KEYS,
     AmendmentExtraction,
     TreatyExtraction,
     coerce_child_value,
@@ -46,6 +48,7 @@ _CHILD_SPECS = [
     ("products", TreatyProduct, PRODUCT_KEYS),
     ("benefits", TreatyBenefit, BENEFIT_KEYS),
     ("cession_rules", CessionRule, CESSION_KEYS),
+    ("rates", TreatyRate, RATE_KEYS),
 ]
 
 
@@ -91,6 +94,7 @@ def children_dict(version: TreatyVersion) -> dict:
         "products": rows("products", PRODUCT_KEYS),
         "benefits": rows("benefits", BENEFIT_KEYS),
         "cession_rules": rows("cession_rules", CESSION_KEYS),
+        "rates": rows("rates", RATE_KEYS),
     }
 
 
@@ -276,6 +280,7 @@ _CHILD_BY_SLUG = {
     "products": ("products", TreatyProduct, PRODUCT_KEYS),
     "benefits": ("benefits", TreatyBenefit, BENEFIT_KEYS),
     "cession-rules": ("cession_rules", CessionRule, CESSION_KEYS),
+    "rates": ("rates", TreatyRate, RATE_KEYS),
 }
 
 

@@ -262,6 +262,10 @@ td.row-actions { white-space: nowrap; text-align: right; }
 .loader.block { display: flex; padding: 22px 4px; }
 .loader.block .spinner { width: 22px; height: 22px; }
 .loader.block .loader-msg { font-size: 15px; }
+/* Extraction status shown on its own line below the upload controls; collapses
+   to nothing when idle so it adds no gap. */
+.tile-status { margin-top: 12px; font-size: 13px; }
+.tile-status:empty { display: none; }
 .editbox input { flex: 1; font-family: var(--mono); font-size: 12.5px; }
 .audit-hash { color: var(--muted); font-size: 11px; }
 .kv { display: grid; grid-template-columns: 180px 1fr; gap: 4px 14px; font-size: 13.5px; }

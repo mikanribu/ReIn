@@ -628,8 +628,8 @@ async function renderHome() {
           </label>
           <button id="btn-extract">Upload &amp; extract</button>
           <button class="ghost" id="btn-sample" title="Extract a bundled sample treaty">Try a sample</button>
-          <span class="muted small" id="extract-status"></span>
         </div>
+        <div class="tile-status" id="extract-status"></div>
       </div>
       <div class="panel upload-tile">
         <h2>Multiple treaties upload <span class="chip superseded">coming soon</span></h2>
@@ -921,6 +921,7 @@ async function renderTreaty(treatyId, tab = "versions") {
 const CHILD_CONFIG = [
   {
     slug: "products", attr: "products", title: "Products", icon: "📦", noun: "product",
+    category: "Product & Benefit", prefix: "product_",
     cols: [
       { key: "product_code", label: "Code" },
       { key: "product_name", label: "Name" },
@@ -930,6 +931,7 @@ const CHILD_CONFIG = [
   },
   {
     slug: "benefits", attr: "benefits", title: "Benefits", icon: "🎯", noun: "benefit",
+    category: "Product & Benefit", prefix: "benefit_",
     cols: [
       { key: "benefit_code", label: "Code" },
       { key: "benefit_name", label: "Name" },
@@ -938,6 +940,7 @@ const CHILD_CONFIG = [
   },
   {
     slug: "cession-rules", attr: "cession_rules", title: "Cession rules / layers", icon: "📚", noun: "layer",
+    category: "Cession & Layers", prefix: "",
     cols: [
       { key: "layer_number", label: "Layer" },
       { key: "layer_name", label: "Name" },
@@ -950,15 +953,22 @@ const CHILD_CONFIG = [
       { key: "country_code", label: "Country" },
     ],
   },
+  {
+    slug: "rates", attr: "rates", title: "Premium rate table", icon: "📈", noun: "rate",
+    category: "Reinsurance Premium Rate", prefix: "",
+    cols: [
+      { key: "age_band", label: "Age / band" },
+      { key: "rate_class", label: "Rate class" },
+      { key: "rate_value", label: "Rate" },
+    ],
+  },
 ];
 
 // Every catalogue field for a collection, in catalogue order (drives the edit
 // form, which exposes all fields — including ones the table doesn't display).
 function childKeys(cfg, meta) {
-  const cat = cfg.slug === "cession-rules" ? "Cession & Layers" : "Product & Benefit";
-  const prefix = cfg.slug === "benefits" ? "benefit_" : cfg.slug === "products" ? "product_" : "";
   return Object.values(meta)
-    .filter((m) => m.category === cat && m.key.startsWith(prefix))
+    .filter((m) => m.category === cfg.category && m.key.startsWith(cfg.prefix))
     .map((m) => m.key);
 }
 

@@ -27,6 +27,7 @@ FieldValue = Optional[Union[str, float, int, bool, list[str]]]
 CAT_TREATY = "Treaty"
 CAT_PRODUCT = "Product & Benefit"
 CAT_CESSION = "Cession & Layers"
+CAT_RATE = "Reinsurance Premium Rate"
 
 # (field_key, requirement, category, description)
 # ``requirement`` keeps the exact wording (incl. "Mandatory where applicable"
@@ -43,8 +44,6 @@ _FIELDS: list[tuple[str, str, str, str]] = [
      "automatic, facultative, automatic_and_facultative, obligatory, or retrocession."),
     ("cedant_name", "Mandatory", CAT_TREATY, "Legal name of the ceding company."),
     ("reinsurer_name", "Mandatory", CAT_TREATY, "Legal name of the reinsurer."),
-    ("lead_reinsurer_indicator", "Optional", CAT_TREATY,
-     "Whether this reinsurer is the lead reinsurer in a panel (true/false)."),
     ("party_share_percentage", "Optional", CAT_TREATY,
      "Reinsurer participation share (number, %) if multiple reinsurers participate."),
     ("treaty_effective_start_date", "Mandatory", CAT_TREATY,
@@ -59,6 +58,9 @@ _FIELDS: list[tuple[str, str, str, str]] = [
      "Currency for treaty limits, premiums and settlement (ISO code, e.g. USD)."),
     ("settlement_currency_code", "Mandatory", CAT_TREATY,
      "Currency in which reinsurance balances are settled (ISO code)."),
+    ("premium_rate", "Optional", CAT_TREATY,
+     "Headline flat reinsurance premium rate (number) for treaties that quote a single rate. "
+     "Leave null when the treaty provides a rate table instead (captured in the rate table)."),
 
     # --- Product & Benefit --------------------------------------------------
     ("product_code", "Mandatory", CAT_PRODUCT, "Source or treaty product code, where available."),
@@ -96,9 +98,21 @@ _FIELDS: list[tuple[str, str, str, str]] = [
     ("aggregation_basis", "Mandatory", CAT_CESSION,
      "per_life, per_policy, per_benefit, per_claim, across_policies, or across_benefits."),
     ("priority_order", "Mandatory", CAT_CESSION, "Rule priority (number) where multiple rules overlap."),
+
+    # --- Reinsurance Premium Rate (tidy rate table: one row per cell) --------
+    # A rate table has an age/age-band row axis and several rate-class columns
+    # whose names vary by treaty. It is stored in long/tidy form — one row per
+    # cell — so any set of columns and any length is captured verbatim.
+    ("age_band", "Mandatory", CAT_RATE,
+     "Age or age band the rate applies to, exactly as written, e.g. '18-29', '45', or '65+'."),
+    ("rate_class", "Mandatory", CAT_RATE,
+     "The rate-class / column heading exactly as written, e.g. 'Preferred NS', 'Standard NS', "
+     "'Standard Smoker', 'Substandard Table B'."),
+    ("rate_value", "Mandatory", CAT_RATE,
+     "The numeric reinsurance rate in that cell (number), exactly as written, e.g. 0.72."),
 ]
 
-CATEGORY_ORDER = [CAT_TREATY, CAT_PRODUCT, CAT_CESSION]
+CATEGORY_ORDER = [CAT_TREATY, CAT_PRODUCT, CAT_CESSION, CAT_RATE]
 
 
 class ExtractedField(BaseModel):
@@ -141,12 +155,14 @@ _TREATY_FIELDS = [f for f in _FIELDS if f[2] == CAT_TREATY]
 _PRODUCT_FIELDS = [f for f in _FIELDS if f[2] == CAT_PRODUCT and f[0].startswith("product_")]
 _BENEFIT_FIELDS = [f for f in _FIELDS if f[2] == CAT_PRODUCT and f[0].startswith("benefit_")]
 _CESSION_FIELDS = [f for f in _FIELDS if f[2] == CAT_CESSION]
+_RATE_FIELDS = [f for f in _FIELDS if f[2] == CAT_RATE]
 
 # Field keys that need a non-string Python type in the child models.
 _INT_KEYS = {"layer_number", "priority_order"}
 _FLOAT_KEYS = {
     "cedant_retention_ratio", "reinsurer_cession_ratio", "layer_attachment_amount",
     "layer_limit_amount", "layer_detachment_amount", "maximum_cedant_retention_amount",
+    "rate_value",
 }
 
 
@@ -175,23 +191,31 @@ def _child_model(name: str, fields: list) -> type[BaseModel]:
 ProductExtraction = _child_model("ProductExtraction", _PRODUCT_FIELDS)
 BenefitExtraction = _child_model("BenefitExtraction", _BENEFIT_FIELDS)
 CessionRuleExtraction = _child_model("CessionRuleExtraction", _CESSION_FIELDS)
+RateExtraction = _child_model("RateExtraction", _RATE_FIELDS)
 
 # The treaty-level flat fields (ExtractedField each) + the child collections.
 TreatyExtraction = create_model(
     "TreatyExtraction",
     __doc__="Data extracted from a reinsurance treaty: treaty-level fields (each "
-            "with provenance), plus lists of products, benefits and cession "
-            "rules (one row per layer). Use null / empty lists when absent.",
+            "with provenance), plus lists of products, benefits, cession rules "
+            "(one row per layer) and premium-rate-table cells (one row per "
+            "age-band × rate-class cell). Use null / empty lists when absent.",
     **{key: (ExtractedField, Field(..., description=desc)) for key, _req, _cat, desc in _TREATY_FIELDS},
     products=(list[ProductExtraction], Field(default_factory=list, description="Products in scope.")),
     benefits=(list[BenefitExtraction], Field(default_factory=list, description="Benefits in scope.")),
     cession_rules=(list[CessionRuleExtraction], Field(default_factory=list, description="Cession rules / layers.")),
+    rates=(list[RateExtraction], Field(
+        default_factory=list,
+        description="Every cell of the reinsurance premium rate table: one entry per "
+                    "(age band × rate class). Capture the column heading verbatim as "
+                    "rate_class. Empty list if the treaty has no rate table.")),
 )
 
 # Field-key lists per collection (used by storage to copy the right columns).
 PRODUCT_KEYS = [f[0] for f in _PRODUCT_FIELDS]
 BENEFIT_KEYS = [f[0] for f in _BENEFIT_FIELDS]
 CESSION_KEYS = [f[0] for f in _CESSION_FIELDS]
+RATE_KEYS = [f[0] for f in _RATE_FIELDS]
 
 
 def coerce_child_value(key: str, value):
@@ -287,4 +311,7 @@ class AmendmentExtraction(BaseModel):
     )
     cession_rules: Optional[list[CessionRuleExtraction]] = Field(
         None, description="If the cession rules / layers change, the full new list; else null."
+    )
+    rates: Optional[list[RateExtraction]] = Field(
+        None, description="If the premium rate table changes, the full new list of cells; else null."
     )

@@ -28,6 +28,33 @@ def _draft(client) -> str:
 
 def test_setup_draft(client):
     state["tid"] = _draft(client)
+    # The premium rate table is extracted as tidy cells (one row per cell).
+    rates = client.get(f"/treaties/{state['tid']}/versions/1").json()["rates"]
+    assert len(rates) == 3
+    assert {r["rate_class"] for r in rates} == {"Preferred NS", "Standard Smoker"}
+    assert rates[0]["rate_value"] == 0.72
+
+
+def test_add_and_edit_rate_cell(client):
+    tid = state["tid"]
+    # Add a new cell with a numeric rate coerced from a string.
+    added = client.post(
+        f"/treaties/{tid}/versions/1/children/rates",
+        json={"values": {"age_band": "40-49", "rate_class": "Preferred NS",
+                         "rate_value": "1.87"}, "actor": "clementine"},
+    )
+    assert added.status_code == 200, added.text
+    row = added.json()
+    assert row["rate_value"] == 1.87
+
+    # Edit that cell's value.
+    edited = client.patch(
+        f"/treaties/{tid}/versions/1/children/rates/{row['id']}",
+        json={"changes": {"rate_value": "1.90"}, "actor": "clementine"},
+    )
+    assert edited.status_code == 200, edited.text
+    assert edited.json()["rate_value"] == 1.90
+    assert len(client.get(f"/treaties/{tid}/versions/1").json()["rates"]) == 4
 
 
 def test_edit_child_row_fills_missing_field(client):

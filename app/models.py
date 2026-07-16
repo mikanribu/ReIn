@@ -120,6 +120,9 @@ class TreatyVersion(Base):
     cession_rules: Mapped[list["CessionRule"]] = relationship(
         back_populates="version", order_by="CessionRule.seq", cascade="all, delete-orphan"
     )
+    rates: Mapped[list["TreatyRate"]] = relationship(
+        back_populates="version", order_by="TreatyRate.seq", cascade="all, delete-orphan"
+    )
 
     @property
     def is_editable(self) -> bool:
@@ -216,6 +219,23 @@ class CessionRule(Base, _ChildProvenance):
     priority_order: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     version: Mapped[TreatyVersion] = relationship(back_populates="cession_rules")
+
+
+class TreatyRate(Base, _ChildProvenance):
+    """One cell of a treaty version's reinsurance premium rate table, stored in
+    long/tidy form: an age/age-band, a rate class (column heading, verbatim) and
+    the numeric rate. One row per (age band × rate class) cell, so any set of
+    columns and any table length is captured."""
+
+    __tablename__ = "treaty_rates"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    version_id: Mapped[str] = mapped_column(ForeignKey("treaty_versions.id"), index=True)
+    age_band: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    rate_class: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    rate_value: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+    version: Mapped[TreatyVersion] = relationship(back_populates="rates")
 
 
 class TreatyChunk(Base):

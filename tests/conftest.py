@@ -18,6 +18,7 @@ from app.schemas.treaty_fields import (
     CessionRuleExtraction,
     ExtractedField,
     ProductExtraction,
+    RateExtraction,
     TreatyExtraction,
 )
 
@@ -71,6 +72,14 @@ def make_fake_extraction() -> TreatyExtraction:
             maximum_cedant_retention_amount=1_000_000, aggregation_basis="per_life",
             priority_order=1, source_quote="the Reinsurer's share shall be 60%",
             source_location="Article 3", confidence=0.98)],
+        rates=[
+            RateExtraction(age_band="18-29", rate_class="Preferred NS", rate_value=0.72,
+                           source_location="Rate table", confidence=0.95),
+            RateExtraction(age_band="18-29", rate_class="Standard Smoker", rate_value=1.49,
+                           source_location="Rate table", confidence=0.95),
+            RateExtraction(age_band="30-39", rate_class="Preferred NS", rate_value=1.29,
+                           source_location="Rate table", confidence=0.95),
+        ],
         **fields,
     )
 

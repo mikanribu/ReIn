@@ -114,11 +114,23 @@ class CessionRuleOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class RateOut(BaseModel):
+    id: str
+    age_band: Optional[str] = None
+    rate_class: Optional[str] = None
+    rate_value: Optional[float] = None
+    source_quote: Optional[str] = None
+    source_location: Optional[str] = None
+    confidence: Optional[float] = None
+    model_config = {"from_attributes": True}
+
+
 class VersionDetail(VersionSummary):
     data_points: list[DataPointOut]
     products: list[ProductOut] = []
     benefits: list[BenefitOut] = []
     cession_rules: list[CessionRuleOut] = []
+    rates: list[RateOut] = []
 
 
 class TreatyOut(BaseModel):
@@ -238,6 +250,7 @@ class CurrentValuesOut(BaseModel):
     products: list[ProductOut] = []
     benefits: list[BenefitOut] = []
     cession_rules: list[CessionRuleOut] = []
+    rates: list[RateOut] = []
 
 
 # --- Chat assistant -----------------------------------------------------------

@@ -214,8 +214,9 @@ package" so `from app.services import treaties` works.
   and `get_db()`, which hands each request its own **session** (a unit of work).
 - `models.py` — the tables as classes: `Document`, `Treaty`, `TreatyVersion`,
   `DataPoint` (treaty-level fields), the child collections `TreatyProduct` /
-  `TreatyBenefit` / `CessionRule`, `TreatyChunk` (the semantic index), and
-  `AuditLog`. Also the status/origin constants.
+  `TreatyBenefit` / `CessionRule` / `TreatyRate` (the premium rate table, one row
+  per cell), `TreatyChunk` (the semantic index), and `AuditLog`. Also the
+  status/origin constants.
 - `observability.py` — optional MLflow helpers: `init_mlflow()`, a `run()`
   context manager, and `log_extraction()` / `log_reindex()`. Everything is a
   no-op unless `MLFLOW_ENABLED=true`, and MLflow is imported lazily so the app
@@ -632,8 +633,11 @@ Add an entry to `_FIELDS` and the entire pipeline picks it up. That's the payoff
 of schema-driven design — say this in a presentation and people nod.
 
 > **Relational children:** the treaty-level fields above are flat `DataPoint`
-> rows, but **products, benefits and cession rules/layers are one-to-many child
-> tables** (a treaty version owns many of each). Extraction returns them as
+> rows, but **products, benefits, cession rules/layers and premium-rate-table
+> cells are one-to-many child tables** (a treaty version owns many of each). The
+> rate table is stored **tidy/long** — one row per (age band × rate class) cell —
+> so any set of rate-class columns and any table length is captured verbatim.
+> Extraction returns them as
 > nested lists; the review screen shows them as their own sections and, **on a
 > draft, lets a reviewer edit, add and delete rows per-row** (a full-field form
 > surfaces the missing values to fill). Amendments on an *approved* version still
