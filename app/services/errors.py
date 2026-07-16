@@ -60,9 +60,22 @@ def _classify(exc: Exception) -> tuple[int, str]:
     if name in {"InternalServerError", "OverloadedError"} or "overloaded" in msg.lower():
         return 503, "the extraction service is temporarily overloaded. Retry shortly."
 
-    # Model returned something we couldn't validate into the schema
+    # Output hit the token ceiling and was truncated mid-response (langchain logs
+    # a "max_tokens stop reason" warning; the truncated JSON then fails to parse).
+    if "max_tokens" in msg or "output is likely incomplete" in msg.lower():
+        return 502, (
+            "the document is long enough that the extraction exceeded the output limit "
+            "and was truncated. Increase LLM_MAX_TOKENS, or split/shorten the document."
+        )
+
+    # Model returned something we couldn't validate into the schema. On long
+    # treaties this is most often silent truncation at the output limit.
     if name in {"ValidationError", "OutputParserException"}:
-        return 502, "the extracted data did not match the expected schema. Retry, or review the document."
+        return 502, (
+            "the extraction response was incomplete or did not match the expected schema "
+            "(long documents can exceed the output limit). Retry; if it persists, raise "
+            "LLM_MAX_TOKENS or shorten the document."
+        )
 
     # Fallback — still a clean 502 rather than a 500 stack trace
     return 502, f"the extraction service returned an unexpected error ({name})."

@@ -25,7 +25,13 @@ class Settings(BaseSettings):
     # Chat assistant defaults to Ollama; extraction defaults to Anthropic.
     chat_llm_provider: Literal["anthropic", "ollama", "azure_openai"] = "ollama"
     extraction_llm_provider: Literal["anthropic", "ollama", "azure_openai"] = "anthropic"
-    llm_max_tokens: int = 16000
+    # Output-token ceiling for a single extraction. A long treaty plus a full
+    # premium-rate table can produce a large structured response; too low a cap
+    # truncates the tool-call JSON mid-way and fails schema validation. Current
+    # Claude models allow up to 128K output (streaming required, which we enable
+    # below), so give generous headroom. Raise further via LLM_MAX_TOKENS for
+    # exceptionally large rate tables.
+    llm_max_tokens: int = 32000
     # Long treaties can take minutes to extract. Streaming keeps the connection
     # alive (avoids "server disconnected" on long generations); the timeout and
     # retries add resilience to transient network drops.
