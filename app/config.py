@@ -26,6 +26,12 @@ class Settings(BaseSettings):
     chat_llm_provider: Literal["anthropic", "ollama", "azure_openai"] = "ollama"
     extraction_llm_provider: Literal["anthropic", "ollama", "azure_openai"] = "anthropic"
     llm_max_tokens: int = 16000
+    # Long treaties can take minutes to extract. Streaming keeps the connection
+    # alive (avoids "server disconnected" on long generations); the timeout and
+    # retries add resilience to transient network drops.
+    llm_streaming: bool = True
+    llm_timeout_seconds: float = 600.0
+    llm_max_retries: int = 3
 
     # Anthropic (Claude)
     anthropic_api_key: SecretStr | None = None

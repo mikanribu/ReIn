@@ -33,7 +33,18 @@ def _build_anthropic(s: Settings, purpose: str) -> BaseChatModel:
     key = _secret(s.anthropic_api_key)
     if not key:
         raise RuntimeError(f"ANTHROPIC_API_KEY must be set in .env or the environment for {purpose}")
-    return ChatAnthropic(model=s.anthropic_model, api_key=key, max_tokens=s.llm_max_tokens)
+    return ChatAnthropic(
+        model=s.anthropic_model,
+        api_key=key,
+        max_tokens=s.llm_max_tokens,
+        # Long treaties can generate a large structured response; a non-streaming
+        # request holds the connection open with no bytes flowing until it's done,
+        # which networks/proxies drop as "server disconnected". Streaming keeps
+        # the connection active. Explicit timeout + retries add resilience.
+        streaming=s.llm_streaming,
+        timeout=s.llm_timeout_seconds,
+        max_retries=s.llm_max_retries,
+    )
 
 
 def _build_ollama(s: Settings) -> BaseChatModel:
@@ -67,6 +78,10 @@ def _build_azure_openai(s: Settings) -> BaseChatModel:
         api_version=s.azure_openai_api_version,
         api_key=key,
         max_tokens=s.llm_max_tokens,
+        # Same rationale as Anthropic: stream long generations, add timeout/retries.
+        streaming=s.llm_streaming,
+        timeout=s.llm_timeout_seconds,
+        max_retries=s.llm_max_retries,
     )
 
 
